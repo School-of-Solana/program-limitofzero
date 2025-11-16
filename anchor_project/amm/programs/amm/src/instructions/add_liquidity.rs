@@ -7,7 +7,7 @@ use anchor_spl::token::{
 };
 
 pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -> Result<()> {
-    require!(amount_a > 0 || amount_b > 0, AmmError::AmountIsZero);
+    require!(amount_a > 0 && amount_b > 0, AmmError::AmountIsZero);
 
     let depositor_account_a = &ctx.accounts.depositor_account_a;
     let depositor_account_b = &ctx.accounts.depositor_account_b;
@@ -139,6 +139,22 @@ fn calculate_lp(
         Ok(lp_amount as u64)
     }
 }
+
+// pub fn integer_sqrt_u64(n: u64) -> u64 {
+//     if n == 0 {
+//         return 0;
+//     }
+//
+//     let mut x = n;
+//     let mut y = (x + 1) / 2;
+//
+//     while y < x {
+//         x = y;
+//         y = (x + n / x) / 2;
+//     }
+//
+//     x
+// }
 
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
