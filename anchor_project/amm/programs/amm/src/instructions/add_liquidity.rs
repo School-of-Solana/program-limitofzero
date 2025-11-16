@@ -2,7 +2,9 @@ use crate::errors::AmmError;
 use crate::states::{AmmPool, AMM_MINT_LIQUIDITY_SEED, AMM_POOL_AUTHORITY_SEED, AMM_POOL_SEED};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{
+    mint_to, transfer_checked, Mint, MintTo, Token, TokenAccount, TransferChecked,
+};
 
 pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -> Result<()> {
     require!(amount_a > 0 || amount_b > 0, AmmError::AmountIsZero);
@@ -10,12 +12,131 @@ pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -
     let depositor_account_a = &ctx.accounts.depositor_account_a;
     let depositor_account_b = &ctx.accounts.depositor_account_b;
 
+    let pool_a = &mut ctx.accounts.pool_account_a;
+    let pool_b = &mut ctx.accounts.pool_account_b;
+
+    let reserve_a = pool_a.amount;
+    let reserve_b = pool_b.amount;
+
+    let is_new_pool = reserve_a == 0 && reserve_b == 0;
+    let (amount_a, amount_b) = if is_new_pool {
+        (amount_a, amount_b)
+    } else {
+        calculate_liquidity_amounts(reserve_a, amount_a, reserve_b, amount_b)?
+    };
+
     require!(
-        depositor_account_a.amount >= amount_a && depositor_account_b.amount >= amount_b,
-        AmmError::AmountIsZero
+        depositor_account_a.amount >= amount_a,
+        AmmError::InsufficientBalance
+    );
+    require!(
+        depositor_account_b.amount >= amount_b,
+        AmmError::InsufficientBalance
     );
 
+    let lp_mint = &ctx.accounts.mint_liquidity;
+    let total_lp = lp_mint.supply;
+    let lp_amount = calculate_lp(amount_a, amount_b, reserve_a, reserve_b, total_lp)?;
+
+    // transfer token a
+    let cpi_accounts = TransferChecked {
+        mint: ctx.accounts.mint_a.to_account_info(),
+        from: depositor_account_a.to_account_info(),
+        to: pool_a.to_account_info(),
+        authority: ctx.accounts.depositor.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+    transfer_checked(cpi_context, amount_a, ctx.accounts.mint_a.decimals)?;
+
+    // transfer token b
+    let cpi_accounts = TransferChecked {
+        mint: ctx.accounts.mint_b.to_account_info(),
+        from: depositor_account_b.to_account_info(),
+        to: pool_b.to_account_info(),
+        authority: ctx.accounts.depositor.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+    transfer_checked(cpi_context, amount_b, ctx.accounts.mint_b.decimals)?;
+
+    // mint lp
+    let authority = &ctx.accounts.authority;
+    let authority_signer_seeds: &[&[&[u8]]] = &[&[
+        &AMM_POOL_AUTHORITY_SEED.as_bytes(),
+        &ctx.accounts.mint_a.key().to_bytes(),
+        &ctx.accounts.mint_b.key().to_bytes(),
+        &[ctx.bumps.authority],
+    ]];
+    let cpi_accounts = MintTo {
+        mint: ctx.accounts.mint_liquidity.to_account_info(),
+        to: ctx.accounts.depositor_account_liquidity.to_account_info(),
+        authority: authority.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_context =
+        CpiContext::new(cpi_program, cpi_accounts).with_signer(authority_signer_seeds);
+    mint_to(cpi_context, lp_amount)?;
+
     Ok(())
+}
+
+fn calculate_liquidity_amounts(
+    reserve_a: u64,
+    amount_a: u64,
+    reserve_b: u64,
+    amount_b: u64,
+) -> Result<(u64, u64)> {
+    require!(reserve_a > 0 && reserve_b > 0, AmmError::InvalidPoolState);
+
+    let required_b = amount_a
+        .checked_mul(reserve_b)
+        .ok_or(AmmError::MathOverflow)?
+        / reserve_a;
+    if amount_b >= required_b {
+        return Ok((amount_a, required_b));
+    }
+
+    let required_a = amount_b
+        .checked_mul(reserve_a)
+        .ok_or(AmmError::MathOverflow)?
+        / reserve_b;
+    if amount_a >= required_a {
+        Ok((required_a, amount_b))
+    } else {
+        Err(AmmError::InsufficientBalance.into())
+    }
+}
+
+fn calculate_lp(
+    amount_a: u64,
+    amount_b: u64,
+    reserve_a: u64,
+    reserve_b: u64,
+    total_lp: u64,
+) -> Result<u64> {
+    if total_lp == 0 {
+        let r = amount_a
+            .checked_mul(amount_b)
+            .ok_or(AmmError::MathOverflow)?
+            .isqrt();
+        Ok(r)
+    } else {
+        let lp_from_a = (amount_a as u128)
+            .checked_mul(total_lp as u128)
+            .ok_or(AmmError::MathOverflow)?
+            / (reserve_a as u128);
+
+        let lp_from_b = (amount_b as u128)
+            .checked_mul(total_lp as u128)
+            .ok_or(AmmError::MathOverflow)?
+            / (reserve_b as u128);
+
+        let lp_amount = lp_from_a.min(lp_from_b);
+        require!(lp_amount > 0, AmmError::LpIsZero);
+
+        Ok(lp_amount as u64)
+    }
 }
 
 #[derive(Accounts)]

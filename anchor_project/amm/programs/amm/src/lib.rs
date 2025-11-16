@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 
-pub  mod instructions;
-pub  mod states;
 mod errors;
+pub mod instructions;
+pub mod states;
 
 declare_id!("264uMZcS5Mcpe5EzAP6P2SoGQE4j7KtpSe6U8mSQZeAN");
 
@@ -15,8 +15,11 @@ pub mod amm {
         instructions::create_amm(ctx, fee, index)
     }
 
-    pub  fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
+    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         instructions::create_pool(ctx)
     }
-}
 
+    pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -> Result<()> {
+        instructions::add_liquidity(ctx, amount_a, amount_b)
+    }
+}

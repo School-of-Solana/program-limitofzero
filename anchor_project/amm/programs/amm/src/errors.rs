@@ -8,4 +8,10 @@ pub enum AmmError {
     AmountIsZero,
     #[msg("Insufficient balance to deposit")]
     InsufficientBalance,
+    #[msg("One of the pools has zero tokens")]
+    InvalidPoolState,
+    #[msg("Math overflow")]
+    MathOverflow,
+    #[msg("LP amount is zero")]
+    LpIsZero,
 }
