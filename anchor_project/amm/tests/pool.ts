@@ -75,6 +75,7 @@ describe("pool", () => {
       const [authorityPda] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("AMM_POOL_AUTHORITY"),
+          ammPda.toBuffer(),
           mintA.publicKey.toBuffer(),
           mintB.publicKey.toBuffer(),
         ],
@@ -150,6 +151,7 @@ describe("pool", () => {
       const [authorityPda] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("AMM_POOL_AUTHORITY"),
+          ammPda.toBuffer(),
           mintC.publicKey.toBuffer(),
           mintC.publicKey.toBuffer(),
         ],
@@ -220,6 +222,7 @@ describe("pool", () => {
       const [authorityPda] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("AMM_POOL_AUTHORITY"),
+          fakeAmmPda.toBuffer(),
           mintD.publicKey.toBuffer(),
           mintA.publicKey.toBuffer(),
         ],
