@@ -120,8 +120,9 @@ fn calculate_lp(
         let product = (amount_a as u128)
             .checked_mul(amount_b as u128)
             .ok_or(AmmError::MathOverflow)?;
-        let r = (product as f64).sqrt() as u64;
-        Ok(r)
+        let r = integer_sqrt_u128(product);
+        require!(r > 0, AmmError::LpIsZero);
+        Ok(r as u64)
     } else {
         let lp_from_a = (amount_a as u128)
             .checked_mul(total_lp as u128)
@@ -140,22 +141,22 @@ fn calculate_lp(
     }
 }
 
-// pub fn integer_sqrt_u64(n: u64) -> u64 {
-//     if n == 0 {
-//         return 0;
-//     }
-//
-//     let mut x = n;
-//     let mut y = (x + 1) / 2;
-//
-//     while y < x {
-//         x = y;
-//         y = (x + n / x) / 2;
-//     }
-//
-//     x
-// }
+pub fn integer_sqrt_u128(n: u128) -> u128 {
+    if n == 0 {
+        return 0;
+    }
 
+    // Метод Ньютона
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+
+    x
+}
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
     #[account(
