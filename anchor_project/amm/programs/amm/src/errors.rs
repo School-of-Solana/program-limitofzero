@@ -24,4 +24,6 @@ pub enum AmmError {
     OutputAmountTooLow,
     #[msg("Empty pull")]
     EmptyPool,
+    #[msg("Invalid fee")]
+    InvalidFee,
 }

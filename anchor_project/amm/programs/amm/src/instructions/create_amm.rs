@@ -1,7 +1,10 @@
+use crate::errors::AmmError;
+use crate::states::{Amm, AMM_SEED, MAX_FEE_BPS};
 use anchor_lang::prelude::*;
-use crate::states::{Amm, AMM_SEED};
 
-pub  fn create_amm(ctx: Context<CreateAmm>, fee: u16, index: u16) -> Result<()> {
+pub fn create_amm(ctx: Context<CreateAmm>, fee: u16, index: u16) -> Result<()> {
+    require!(fee < MAX_FEE_BPS, AmmError::InvalidFee);
+
     let amm = &mut ctx.accounts.amm;
     amm.fee = fee;
     amm.index = index;
@@ -11,7 +14,7 @@ pub  fn create_amm(ctx: Context<CreateAmm>, fee: u16, index: u16) -> Result<()> 
 
 #[derive(Accounts)]
 #[instruction(fee: u16, index: u16)]
-pub  struct CreateAmm<'info> {
+pub struct CreateAmm<'info> {
     #[account(
     init,
     payer = signer,
@@ -27,5 +30,5 @@ pub  struct CreateAmm<'info> {
     #[account(mut)]
     signer: Signer<'info>,
 
-    pub  system_program: Program<'info, System>,
+    pub system_program: Program<'info, System>,
 }
