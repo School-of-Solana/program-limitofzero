@@ -33,6 +33,10 @@ export default function Swap() {
   const [balanceB, setBalanceB] = useState<string>("");
   const [poolReserveA, setPoolReserveA] = useState<string>("");
   const [poolReserveB, setPoolReserveB] = useState<string>("");
+  const [poolFee, setPoolFee] = useState<number>(0);
+  const [estimatedOutput, setEstimatedOutput] = useState<string>("");
+  const [slippage, setSlippage] = useState<string>("");
+  const [recommendedMinOut, setRecommendedMinOut] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [loadingPools, setLoadingPools] = useState(false);
   const [status, setStatus] = useState<string>("");
@@ -165,10 +169,101 @@ export default function Swap() {
         setPoolReserveA(reserveA);
         setPoolReserveB(reserveB);
       }
+      
+      // Fetch AMM fee
+      try {
+        const program = getProgram(connection, { publicKey, signTransaction, signAllTransactions } as any);
+        const accountNamespace = program.account as unknown as {
+          amm: {
+            fetch: (address: PublicKey) => Promise<{ index: number; fee: number; admin: PublicKey }>;
+          };
+        };
+        const ammData = await accountNamespace.amm.fetch(pool.amm);
+        setPoolFee(ammData.fee);
+      } catch (error) {
+        console.error("Error fetching AMM fee:", error);
+        setPoolFee(0);
+      }
     } catch (error) {
       console.error("Error fetching pool reserves:", error);
       setPoolReserveA("N/A");
       setPoolReserveB("N/A");
+    }
+  };
+
+  const calculateSwapOutput = async (swapAmount: string, isSwapA: boolean, pool: PoolWithIndex) => {
+    if (!swapAmount || parseFloat(swapAmount) <= 0 || !pool || poolReserveA === "N/A" || poolReserveB === "N/A") {
+      setEstimatedOutput("");
+      setSlippage("");
+      setRecommendedMinOut("");
+      return;
+    }
+
+    try {
+      const mintAInfo = await getMint(connection, pool.mintA);
+      const mintBInfo = await getMint(connection, pool.mintB);
+      
+      // Get raw reserves from pool accounts
+      const authorityPda = await getAuthorityPda(pool.amm, pool.mintA, pool.mintB);
+      const poolAccountA = getAssociatedTokenAddressSync(pool.mintA, authorityPda, true);
+      const poolAccountB = getAssociatedTokenAddressSync(pool.mintB, authorityPda, true);
+      
+      const accountA = await getAccount(connection, poolAccountA);
+      const accountB = await getAccount(connection, poolAccountB);
+      
+      // Raw reserves (in token's native units)
+      const inputReserveRaw = isSwapA ? accountA.amount : accountB.amount;
+      const outputReserveRaw = isSwapA ? accountB.amount : accountA.amount;
+      const inputDecimals = isSwapA ? mintAInfo.decimals : mintBInfo.decimals;
+      const outputDecimals = isSwapA ? mintBInfo.decimals : mintAInfo.decimals;
+      
+      if (inputReserveRaw === BigInt(0) || outputReserveRaw === BigInt(0)) {
+        setEstimatedOutput("");
+        setSlippage("");
+        setRecommendedMinOut("");
+        return;
+      }
+
+      const amount = parseFloat(swapAmount);
+      const amountRaw = BigInt(Math.floor(amount * Math.pow(10, inputDecimals)));
+      
+      // Calculate effective amount after fee
+      const feeBps = poolFee;
+      const percent = BigInt(10000 - feeBps);
+      const amountEff = (amountRaw * percent) / BigInt(10000);
+      
+      // Constant product formula: k = x * y
+      const k = inputReserveRaw * outputReserveRaw;
+      
+      // New input reserve after swap
+      const newInputReserve = inputReserveRaw + amountEff;
+      
+      // New output reserve
+      const newOutputReserve = k / newInputReserve;
+      
+      // Output amount (in raw format)
+      const outputAmountRaw = outputReserveRaw - newOutputReserve;
+      const outputAmount = Number(outputAmountRaw) / Math.pow(10, outputDecimals);
+      
+      setEstimatedOutput(outputAmount.toFixed(6));
+      
+      // Calculate slippage
+      const inputReserveUI = Number(inputReserveRaw) / Math.pow(10, inputDecimals);
+      const outputReserveUI = Number(outputReserveRaw) / Math.pow(10, outputDecimals);
+      const spotPrice = outputReserveUI / inputReserveUI;
+      const expectedOutput = amount * spotPrice;
+      const slippagePercent = ((expectedOutput - outputAmount) / expectedOutput) * 100;
+      
+      setSlippage(slippagePercent.toFixed(2));
+      
+      // Recommend min_out with 1% slippage tolerance
+      const recommendedMin = outputAmount * 0.99; // 1% slippage tolerance
+      setRecommendedMinOut(recommendedMin.toFixed(6));
+    } catch (error) {
+      console.error("Error calculating swap output:", error);
+      setEstimatedOutput("Error");
+      setSlippage("Error");
+      setRecommendedMinOut("");
     }
   };
 
@@ -180,8 +275,12 @@ export default function Swap() {
       setMintB("");
       setPoolReserveA("");
       setPoolReserveB("");
+      setPoolFee(0);
       setBalanceA("");
       setBalanceB("");
+      setEstimatedOutput("");
+      setSlippage("");
+      setRecommendedMinOut("");
       return;
     }
 
@@ -193,7 +292,7 @@ export default function Swap() {
       setMintA(pool.mintA.toString());
       setMintB(pool.mintB.toString());
       
-      // Fetch pool reserves
+      // Fetch pool reserves and fee
       await fetchPoolReserves(pool);
       
       // Fetch user balances
@@ -218,6 +317,19 @@ export default function Swap() {
     }
   }, [mintB, selectedPool, publicKey, connection]);
 
+  useEffect(() => {
+    if (selectedPool && amount && parseFloat(amount) > 0) {
+      const pool = pools.find((p) => p.poolPda.toString() === selectedPool);
+      if (pool && poolReserveA && poolReserveB && poolReserveA !== "N/A" && poolReserveB !== "N/A") {
+        calculateSwapOutput(amount, isSwapA, pool);
+      }
+    } else {
+      setEstimatedOutput("");
+      setSlippage("");
+      setRecommendedMinOut("");
+    }
+  }, [amount, isSwapA, selectedPool, poolReserveA, poolReserveB, poolFee, pools, connection]);
+
   const handleSwap = async () => {
     if (!publicKey || !signTransaction) {
       setStatus("Please connect your wallet");
@@ -239,9 +351,15 @@ export default function Swap() {
       const mintBPubkey = new PublicKey(mintB);
       const poolPda = await getPoolPda(ammPda, mintAPubkey, mintBPubkey);
 
-      const decimals = 9; // Assuming 9 decimals
-      const amountBN = new BN(parseFloat(amount) * Math.pow(10, decimals));
-      const minOutBN = new BN(parseFloat(minOut) * Math.pow(10, decimals));
+      // Get actual decimals from mints
+      const mintAInfo = await getMint(connection, mintAPubkey);
+      const mintBInfo = await getMint(connection, mintBPubkey);
+      
+      const inputDecimals = isSwapA ? mintAInfo.decimals : mintBInfo.decimals;
+      const outputDecimals = isSwapA ? mintBInfo.decimals : mintAInfo.decimals;
+      
+      const amountBN = new BN(Math.floor(parseFloat(amount) * Math.pow(10, inputDecimals)));
+      const minOutBN = new BN(Math.floor(parseFloat(minOut || "0") * Math.pow(10, outputDecimals)));
 
       const authorityPda = await getAuthorityPda(ammPda, mintAPubkey, mintBPubkey);
       const poolAccountA = getAssociatedTokenAddressSync(mintAPubkey, authorityPda, true);
@@ -323,10 +441,21 @@ export default function Swap() {
           )}
           {selectedPool && (poolReserveA || poolReserveB) && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm font-medium text-blue-900 mb-1">Pool Reserves:</p>
-              <p className="text-sm text-blue-700">
+              <p className="text-sm font-medium text-blue-900 mb-2">Pool Reserves:</p>
+              <p className="text-sm text-blue-700 mb-2">
                 Token A: {poolReserveA} | Token B: {poolReserveB}
               </p>
+              {poolReserveA !== "N/A" && poolReserveB !== "N/A" && parseFloat(poolReserveA) > 0 && parseFloat(poolReserveB) > 0 && (
+                <div className="mt-2 pt-2 border-t border-blue-300">
+                  <p className="text-sm font-medium text-blue-900 mb-1">Exchange Rate:</p>
+                  <p className="text-sm text-blue-700">
+                    1 Token A = {((parseFloat(poolReserveB) / parseFloat(poolReserveA))).toFixed(6)} Token B
+                  </p>
+                  <p className="text-sm text-blue-700">
+                    1 Token B = {((parseFloat(poolReserveA) / parseFloat(poolReserveB))).toFixed(6)} Token A
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -441,6 +570,43 @@ export default function Swap() {
             step="0.000000001"
           />
         </div>
+        {amount && parseFloat(amount) > 0 && estimatedOutput && (
+          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-sm font-medium text-green-900 mb-2">Estimated Output:</p>
+            <p className="text-sm text-green-700 mb-1">
+              You will receive: <span className="font-semibold">{estimatedOutput}</span> {isSwapA ? "Token B" : "Token A"}
+            </p>
+            {slippage && (
+              <p className="text-sm text-green-700 mb-1">
+                Slippage: <span className={`font-semibold ${parseFloat(slippage) > 5 ? "text-red-600" : parseFloat(slippage) > 2 ? "text-yellow-600" : ""}`}>{slippage}%</span>
+              </p>
+            )}
+            {recommendedMinOut && (
+              <div className="mt-2 pt-2 border-t border-green-300">
+                <p className="text-sm font-medium text-green-900 mb-1">Recommended Min Output:</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={minOut}
+                    onChange={(e) => setMinOut(e.target.value)}
+                    className="flex-1 px-3 py-1 text-sm border border-green-300 rounded-md focus:ring-2 focus:ring-green-500"
+                    placeholder={recommendedMinOut}
+                    step="0.000000001"
+                  />
+                  <button
+                    onClick={() => setMinOut(recommendedMinOut)}
+                    className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+                  >
+                    Use Recommended
+                  </button>
+                </div>
+                <p className="text-xs text-green-600 mt-1">
+                  Based on 1% slippage tolerance
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Minimum Output (optional)
@@ -450,7 +616,7 @@ export default function Swap() {
             value={minOut}
             onChange={(e) => setMinOut(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-            placeholder="0.0"
+            placeholder={recommendedMinOut || "0.0"}
             step="0.000000001"
           />
         </div>
@@ -469,4 +635,5 @@ export default function Swap() {
     </div>
   );
 }
+
 

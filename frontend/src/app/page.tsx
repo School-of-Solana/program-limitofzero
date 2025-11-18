@@ -6,6 +6,7 @@ import { useState } from "react";
 import CreateAmm from "@/components/CreateAmm";
 import CreatePool from "@/components/CreatePool";
 import AddLiquidity from "@/components/AddLiquidity";
+import WithdrawLiquidity from "@/components/WithdrawLiquidity";
 import Swap from "@/components/Swap";
 import PoolList from "@/components/PoolList";
 import DevTools from "@/components/DevTools";
@@ -13,7 +14,7 @@ import TokenBalance from "@/components/TokenBalance";
 
 export default function Home() {
   const { connected } = useWallet();
-  const [activeTab, setActiveTab] = useState<"create-amm" | "create-pool" | "add-liquidity" | "swap" | "pools" | "dev-tools" | "tokens">("pools");
+  const [activeTab, setActiveTab] = useState<"create-amm" | "create-pool" | "add-liquidity" | "withdraw-liquidity" | "swap" | "pools" | "dev-tools" | "tokens">("pools");
   const isDev = process.env.NODE_ENV === "development";
 
   return (
@@ -83,6 +84,16 @@ export default function Home() {
                   Add Liquidity
                 </button>
                 <button
+                  onClick={() => setActiveTab("withdraw-liquidity")}
+                  className={`px-4 py-2 font-semibold ${
+                    activeTab === "withdraw-liquidity"
+                      ? "border-b-2 border-blue-500 text-blue-600"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  Withdraw Liquidity
+                </button>
+                <button
                   onClick={() => setActiveTab("swap")}
                   className={`px-4 py-2 font-semibold ${
                     activeTab === "swap"
@@ -112,6 +123,7 @@ export default function Home() {
                 {activeTab === "create-amm" && <CreateAmm />}
                 {activeTab === "create-pool" && <CreatePool />}
                 {activeTab === "add-liquidity" && <AddLiquidity />}
+                {activeTab === "withdraw-liquidity" && <WithdrawLiquidity />}
                 {activeTab === "swap" && <Swap />}
                 {activeTab === "dev-tools" && isDev && <DevTools />}
               </div>

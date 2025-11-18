@@ -1,12 +1,12 @@
 "use client";
 
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useSavedMints } from "@/hooks/useSavedMints";
 import StatusMessage from "./StatusMessage";
 import { getProgram, getAmmPda, getPoolPda, getAuthorityPda, getMintLiquidityPda } from "@/lib/program";
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
 import { SystemProgram } from "@solana/web3.js";
 
 export default function CreatePool() {
@@ -16,8 +16,51 @@ export default function CreatePool() {
   const [ammIndex, setAmmIndex] = useState<string>("1");
   const [mintA, setMintA] = useState<string>("");
   const [mintB, setMintB] = useState<string>("");
+  const [balanceA, setBalanceA] = useState<string>("");
+  const [balanceB, setBalanceB] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
+
+  const fetchTokenBalance = async (mintAddress: string, setBalance: (value: string) => void) => {
+    if (!publicKey || !mintAddress) {
+      setBalance("");
+      return;
+    }
+
+    try {
+      const mintPubkey = new PublicKey(mintAddress);
+      const tokenAccount = getAssociatedTokenAddressSync(mintPubkey, publicKey, false);
+      
+      try {
+        const account = await getAccount(connection, tokenAccount);
+        const mintInfo = await getMint(connection, mintPubkey);
+        const balance = (Number(account.amount) / Math.pow(10, mintInfo.decimals)).toFixed(6);
+        setBalance(balance);
+      } catch (error) {
+        // Token account doesn't exist
+        setBalance("0.000000");
+      }
+    } catch (error) {
+      console.error("Error fetching token balance:", error);
+      setBalance("Error");
+    }
+  };
+
+  useEffect(() => {
+    if (mintA) {
+      fetchTokenBalance(mintA, setBalanceA);
+    } else {
+      setBalanceA("");
+    }
+  }, [mintA, publicKey, connection]);
+
+  useEffect(() => {
+    if (mintB) {
+      fetchTokenBalance(mintB, setBalanceB);
+    } else {
+      setBalanceB("");
+    }
+  }, [mintB, publicKey, connection]);
 
   const handleCreatePool = async () => {
     if (!publicKey || !signTransaction) {
@@ -132,6 +175,11 @@ export default function CreatePool() {
               </select>
             )}
           </div>
+          {balanceA && (
+            <p className="mt-1 text-sm text-gray-600">
+              Your balance: <span className="font-semibold">{balanceA}</span>
+            </p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -162,6 +210,11 @@ export default function CreatePool() {
               </select>
             )}
           </div>
+          {balanceB && (
+            <p className="mt-1 text-sm text-gray-600">
+              Your balance: <span className="font-semibold">{balanceB}</span>
+            </p>
+          )}
         </div>
         <button
           onClick={handleCreatePool}
