@@ -26,4 +26,13 @@ pub mod amm {
     pub fn withdraw_liquidity(ctx: Context<WithdrawLiquidity>, amount: u64) -> Result<()> {
         instructions::withdraw_liquidity(ctx, amount)
     }
+
+    pub fn swap(
+        ctx: Context<Swap>,
+        is_swap_a: bool,
+        amount: u64,
+        min_out_amount: u64,
+    ) -> Result<()> {
+        instructions::swap(ctx, is_swap_a, amount, min_out_amount)
+    }
 }
