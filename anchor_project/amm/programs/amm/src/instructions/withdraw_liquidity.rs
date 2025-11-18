@@ -24,6 +24,7 @@ pub fn withdraw_liquidity(ctx: Context<WithdrawLiquidity>, lp_amount_to_burn: u6
     let reserve_a = pool_a.amount;
     let reserve_b = pool_b.amount;
 
+    require!(reserve_b > 0 && reserve_b > 0, AmmError::InvalidPoolState);
     let (amount_a_out, amount_b_out) =
         calculate_out_amounts(lp_amount_to_burn, total_lp, reserve_a, reserve_b)?;
 
