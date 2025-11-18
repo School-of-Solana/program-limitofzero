@@ -22,4 +22,8 @@ pub mod amm {
     pub fn add_liquidity(ctx: Context<AddLiquidity>, amount_a: u64, amount_b: u64) -> Result<()> {
         instructions::add_liquidity(ctx, amount_a, amount_b)
     }
+
+    pub fn withdraw_liquidity(ctx: Context<WithdrawLiquidity>, amount: u64) -> Result<()> {
+        instructions::withdraw_liquidity(ctx, amount)
+    }
 }

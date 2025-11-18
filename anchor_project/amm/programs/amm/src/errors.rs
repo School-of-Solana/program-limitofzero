@@ -14,4 +14,10 @@ pub enum AmmError {
     MathOverflow,
     #[msg("LP amount is zero")]
     LpIsZero,
+    #[msg("Total lp supply is zero")]
+    LpSupplyIsZero,
+    #[msg("Insufficient balance of LP token")]
+    InsufficientLpBalance,
+    #[msg("Lp balance is more than total supply")]
+    InvalidLpBalance,
 }

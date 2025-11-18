@@ -132,11 +132,13 @@ fn calculate_lp(
         require!(r > 0, AmmError::LpIsZero);
         Ok(r as u64)
     } else {
+        // lp = amount_a * total_lp / reserve_a
         let lp_from_a = (amount_a as u128)
             .checked_mul(total_lp as u128)
             .ok_or(AmmError::MathOverflow)?
             / (reserve_a as u128);
 
+        // lp = amount_b * total_lp / reserve_b
         let lp_from_b = (amount_b as u128)
             .checked_mul(total_lp as u128)
             .ok_or(AmmError::MathOverflow)?
@@ -154,7 +156,6 @@ pub fn integer_sqrt_u128(n: u128) -> u128 {
         return 0;
     }
 
-    // Метод Ньютона
     let mut x = n;
     let mut y = (x + 1) / 2;
 
