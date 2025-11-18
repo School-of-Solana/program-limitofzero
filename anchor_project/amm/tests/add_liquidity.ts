@@ -422,5 +422,486 @@ describe("add_liquidity", () => {
         assert.strictEqual(poolAccountAAfter.amount.toString(), reserveA.add(expectedUsedA).toString(), `Pool A should be ${reserveA.add(expectedUsedA).toString()} but was ${poolAccountAAfter.amount.toString()}`);
         assert.strictEqual(poolAccountBAfter.amount.toString(), reserveB.add(expectedUsedB).toString(), `Pool B should be ${reserveB.add(expectedUsedB).toString()} but was ${poolAccountBAfter.amount.toString()}`);
     });
+
+    it("Cannot add liquidity with amount_a = 0", async () => {
+        const ammIndex4 = 203;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex4);
+        const {poolPda} = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const depositorAccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositorAccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        const amountA = new anchor.BN(0);
+        const amountB = new anchor.BN(100).mul(DECIMALS);
+
+        await mintTo(connection, signer, mintB.publicKey, depositorAccountB, signer, amountB.toNumber());
+
+        try {
+            await program.methods.addLiquidity(amountA, amountB).accounts({
+                pool: poolPda,
+                mintA: mintA.publicKey,
+                mintB: mintB.publicKey,
+                depositor: signer.publicKey,
+                depositorAccountA: depositorAccountA,
+                depositorAccountB: depositorAccountB,
+                payer: signer.publicKey,
+            }).signers([signer]).rpc({commitment: "confirmed"});
+            assert.fail("Expected transaction to fail");
+        } catch (err) {
+            const errorString = err.toString();
+            assert.isTrue(errorString.includes("AmountIsZero") || errorString.includes("6001"), `Expected AmountIsZero error, got: ${errorString}`);
+        }
+    });
+
+    it("Cannot add liquidity with amount_b = 0", async () => {
+        const ammIndex5 = 204;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex5);
+        const {poolPda} = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const depositorAccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositorAccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        const amountA = new anchor.BN(100).mul(DECIMALS);
+        const amountB = new anchor.BN(0);
+
+        await mintTo(connection, signer, mintA.publicKey, depositorAccountA, signer, amountA.toNumber());
+
+        try {
+            await program.methods.addLiquidity(amountA, amountB).accounts({
+                pool: poolPda,
+                mintA: mintA.publicKey,
+                mintB: mintB.publicKey,
+                depositor: signer.publicKey,
+                depositorAccountA: depositorAccountA,
+                depositorAccountB: depositorAccountB,
+                payer: signer.publicKey,
+            }).signers([signer]).rpc({commitment: "confirmed"});
+            assert.fail("Expected transaction to fail");
+        } catch (err) {
+            const errorString = err.toString();
+            assert.isTrue(errorString.includes("AmountIsZero") || errorString.includes("6001"), `Expected AmountIsZero error, got: ${errorString}`);
+        }
+    });
+
+    it("Cannot add liquidity with insufficient balance in account A", async () => {
+        const ammIndex6 = 205;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex6);
+        const {poolPda} = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const depositorAccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositorAccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        let accountABalance = new anchor.BN(0);
+        try {
+            const accountA = await getAccount(connection, depositorAccountA);
+            accountABalance = new anchor.BN(accountA.amount.toString());
+        } catch (err) {
+        }
+
+        let accountBBalance = new anchor.BN(0);
+        try {
+            const accountB = await getAccount(connection, depositorAccountB);
+            accountBBalance = new anchor.BN(accountB.amount.toString());
+        } catch (err) {
+        }
+
+        const amountA = accountABalance.add(new anchor.BN(1)).mul(new anchor.BN(100));
+        const amountB = new anchor.BN(100).mul(DECIMALS);
+
+        if (accountBBalance.lt(amountB)) {
+            await mintTo(connection, signer, mintB.publicKey, depositorAccountB, signer, amountB.sub(accountBBalance).toNumber());
+        }
+
+        const finalAccountA = await getAccount(connection, depositorAccountA);
+        const finalBalanceA = new anchor.BN(finalAccountA.amount.toString());
+        assert.isTrue(finalBalanceA.lt(amountA), `Account A should have insufficient balance: ${finalBalanceA.toString()} < ${amountA.toString()}`);
+
+        try {
+            await program.methods.addLiquidity(amountA, amountB).accounts({
+                pool: poolPda,
+                mintA: mintA.publicKey,
+                mintB: mintB.publicKey,
+                depositor: signer.publicKey,
+                depositorAccountA: depositorAccountA,
+                depositorAccountB: depositorAccountB,
+                payer: signer.publicKey,
+            }).signers([signer]).rpc({commitment: "confirmed"});
+            assert.fail("Expected transaction to fail");
+        } catch (err) {
+            const errorString = err.toString();
+            assert.isTrue(errorString.includes("InsufficientBalance") || errorString.includes("6003"), `Expected InsufficientBalance error, got: ${errorString}`);
+        }
+    });
+
+    it("Cannot add liquidity with insufficient balance in account B", async () => {
+        const ammIndex7 = 206;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex7);
+        const {poolPda} = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const depositorAccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositorAccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        let accountABalance = new anchor.BN(0);
+        try {
+            const accountA = await getAccount(connection, depositorAccountA);
+            accountABalance = new anchor.BN(accountA.amount.toString());
+        } catch (err) {
+        }
+
+        let accountBBalance = new anchor.BN(0);
+        try {
+            const accountB = await getAccount(connection, depositorAccountB);
+            accountBBalance = new anchor.BN(accountB.amount.toString());
+        } catch (err) {
+        }
+
+        const amountA = new anchor.BN(100).mul(DECIMALS);
+        const amountB = accountBBalance.add(new anchor.BN(1)).mul(new anchor.BN(100));
+
+        if (accountABalance.lt(amountA)) {
+            await mintTo(connection, signer, mintA.publicKey, depositorAccountA, signer, amountA.sub(accountABalance).toNumber());
+        }
+
+        const finalAccountB = await getAccount(connection, depositorAccountB);
+        const finalBalanceB = new anchor.BN(finalAccountB.amount.toString());
+        assert.isTrue(finalBalanceB.lt(amountB), `Account B should have insufficient balance: ${finalBalanceB.toString()} < ${amountB.toString()}`);
+
+        try {
+            await program.methods.addLiquidity(amountA, amountB).accounts({
+                pool: poolPda,
+                mintA: mintA.publicKey,
+                mintB: mintB.publicKey,
+                depositor: signer.publicKey,
+                depositorAccountA: depositorAccountA,
+                depositorAccountB: depositorAccountB,
+                payer: signer.publicKey,
+            }).signers([signer]).rpc({commitment: "confirmed"});
+            assert.fail("Expected transaction to fail");
+        } catch (err) {
+            const errorString = err.toString();
+            assert.isTrue(errorString.includes("InsufficientBalance") || errorString.includes("6003"), `Expected InsufficientBalance error, got: ${errorString}`);
+        }
+    });
+
+    it("Add liquidity using required_b branch (amount_a < required_a, but amount_b >= required_b)", async () => {
+        const ammIndex9 = 208;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex9);
+        const {
+            poolPda,
+            mintLiquidityPda,
+            poolAccountA,
+            poolAccountB
+        } = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const initialAmountA = new anchor.BN(100).mul(DECIMALS);
+        const initialAmountB = new anchor.BN(100).mul(DECIMALS);
+
+        const depositor1AccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositor1AccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, initialAmountA.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, initialAmountB.toNumber());
+
+        await program.methods.addLiquidity(initialAmountA, initialAmountB).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountABefore = await getAccount(connection, poolAccountA);
+        const poolAccountBBefore = await getAccount(connection, poolAccountB);
+        const mintLiquidityBefore = await getMint(connection, mintLiquidityPda);
+
+        const reserveA = new anchor.BN(poolAccountABefore.amount.toString());
+        const reserveB = new anchor.BN(poolAccountBBefore.amount.toString());
+        const totalLpBefore = new anchor.BN(mintLiquidityBefore.supply.toString());
+
+        const amountA2 = new anchor.BN(50).mul(DECIMALS);
+        const amountB2 = new anchor.BN(200).mul(DECIMALS);
+
+        const requiredB = amountA2.mul(reserveB).div(reserveA);
+        const requiredA = amountB2.mul(reserveA).div(reserveB);
+
+        assert.isTrue(amountA2.lt(requiredA), `amountA2 (${amountA2.toString()}) should be less than requiredA (${requiredA.toString()})`);
+        assert.isTrue(amountB2.gte(requiredB), `amountB2 (${amountB2.toString()}) should be >= requiredB (${requiredB.toString()})`);
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, amountA2.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, amountB2.toNumber());
+
+        await program.methods.addLiquidity(amountA2, amountB2).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountAAfter = await getAccount(connection, poolAccountA);
+        const poolAccountBAfter = await getAccount(connection, poolAccountB);
+        const mintLiquidityAfter = await getMint(connection, mintLiquidityPda);
+        const depositor1AccountLiquidity = getAssociatedTokenAddressSync(mintLiquidityPda, signer.publicKey, false);
+        const lpAccount2Total = await getAccount(connection, depositor1AccountLiquidity);
+
+        const expectedUsedA = amountA2;
+        const expectedUsedB = requiredB;
+
+        const lpFromA2 = expectedUsedA.mul(totalLpBefore).div(reserveA);
+        const lpFromB2 = expectedUsedB.mul(totalLpBefore).div(reserveB);
+        const expectedLp2 = lpFromA2.lt(lpFromB2) ? lpFromA2 : lpFromB2;
+
+        assert.strictEqual(mintLiquidityAfter.supply.toString(), totalLpBefore.add(expectedLp2).toString(), `Total LP should be ${totalLpBefore.add(expectedLp2).toString()} but was ${mintLiquidityAfter.supply.toString()}`);
+        assert.strictEqual(poolAccountAAfter.amount.toString(), reserveA.add(expectedUsedA).toString(), `Pool A should be ${reserveA.add(expectedUsedA).toString()} but was ${poolAccountAAfter.amount.toString()}`);
+        assert.strictEqual(poolAccountBAfter.amount.toString(), reserveB.add(expectedUsedB).toString(), `Pool B should be ${reserveB.add(expectedUsedB).toString()} but was ${poolAccountBAfter.amount.toString()}`);
+    });
+
+    it("Add liquidity when amount_b exactly equals required_b", async () => {
+        const ammIndex10 = 209;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex10);
+        const {
+            poolPda,
+            mintLiquidityPda,
+            poolAccountA,
+            poolAccountB
+        } = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const initialAmountA = new anchor.BN(100).mul(DECIMALS);
+        const initialAmountB = new anchor.BN(100).mul(DECIMALS);
+
+        const depositor1AccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositor1AccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, initialAmountA.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, initialAmountB.toNumber());
+
+        await program.methods.addLiquidity(initialAmountA, initialAmountB).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountABefore = await getAccount(connection, poolAccountA);
+        const poolAccountBBefore = await getAccount(connection, poolAccountB);
+        const mintLiquidityBefore = await getMint(connection, mintLiquidityPda);
+
+        const reserveA = new anchor.BN(poolAccountABefore.amount.toString());
+        const reserveB = new anchor.BN(poolAccountBBefore.amount.toString());
+        const totalLpBefore = new anchor.BN(mintLiquidityBefore.supply.toString());
+
+        const amountA2 = new anchor.BN(200).mul(DECIMALS);
+        const requiredB = amountA2.mul(reserveB).div(reserveA);
+        const amountB2 = requiredB;
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, amountA2.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, amountB2.toNumber());
+
+        await program.methods.addLiquidity(amountA2, amountB2).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountAAfter = await getAccount(connection, poolAccountA);
+        const poolAccountBAfter = await getAccount(connection, poolAccountB);
+        const mintLiquidityAfter = await getMint(connection, mintLiquidityPda);
+
+        const expectedUsedA = amountA2;
+        const expectedUsedB = requiredB;
+
+        const lpFromA2 = expectedUsedA.mul(totalLpBefore).div(reserveA);
+        const lpFromB2 = expectedUsedB.mul(totalLpBefore).div(reserveB);
+        const expectedLp2 = lpFromA2.lt(lpFromB2) ? lpFromA2 : lpFromB2;
+
+        assert.strictEqual(mintLiquidityAfter.supply.toString(), totalLpBefore.add(expectedLp2).toString(), `Total LP should be ${totalLpBefore.add(expectedLp2).toString()} but was ${mintLiquidityAfter.supply.toString()}`);
+        assert.strictEqual(poolAccountAAfter.amount.toString(), reserveA.add(expectedUsedA).toString(), `Pool A should be ${reserveA.add(expectedUsedA).toString()} but was ${poolAccountAAfter.amount.toString()}`);
+        assert.strictEqual(poolAccountBAfter.amount.toString(), reserveB.add(expectedUsedB).toString(), `Pool B should be ${reserveB.add(expectedUsedB).toString()} but was ${poolAccountBAfter.amount.toString()}`);
+    });
+
+    it("Add liquidity when amount_a exactly equals required_a", async () => {
+        const ammIndex11 = 210;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex11);
+        const {
+            poolPda,
+            mintLiquidityPda,
+            poolAccountA,
+            poolAccountB
+        } = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const initialAmountA = new anchor.BN(100).mul(DECIMALS);
+        const initialAmountB = new anchor.BN(100).mul(DECIMALS);
+
+        const depositor1AccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositor1AccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, initialAmountA.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, initialAmountB.toNumber());
+
+        await program.methods.addLiquidity(initialAmountA, initialAmountB).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountABefore = await getAccount(connection, poolAccountA);
+        const poolAccountBBefore = await getAccount(connection, poolAccountB);
+        const mintLiquidityBefore = await getMint(connection, mintLiquidityPda);
+
+        const reserveA = new anchor.BN(poolAccountABefore.amount.toString());
+        const reserveB = new anchor.BN(poolAccountBBefore.amount.toString());
+        const totalLpBefore = new anchor.BN(mintLiquidityBefore.supply.toString());
+
+        const amountB2 = new anchor.BN(200).mul(DECIMALS);
+        const requiredA = amountB2.mul(reserveA).div(reserveB);
+        const amountA2 = requiredA;
+
+        await mintTo(connection, signer, mintA.publicKey, depositor1AccountA, signer, amountA2.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositor1AccountB, signer, amountB2.toNumber());
+
+        await program.methods.addLiquidity(amountA2, amountB2).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositor1AccountA,
+            depositorAccountB: depositor1AccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const poolAccountAAfter = await getAccount(connection, poolAccountA);
+        const poolAccountBAfter = await getAccount(connection, poolAccountB);
+        const mintLiquidityAfter = await getMint(connection, mintLiquidityPda);
+
+        const expectedUsedA = requiredA;
+        const expectedUsedB = amountB2;
+
+        const lpFromA2 = expectedUsedA.mul(totalLpBefore).div(reserveA);
+        const lpFromB2 = expectedUsedB.mul(totalLpBefore).div(reserveB);
+        const expectedLp2 = lpFromA2.lt(lpFromB2) ? lpFromA2 : lpFromB2;
+
+        assert.strictEqual(mintLiquidityAfter.supply.toString(), totalLpBefore.add(expectedLp2).toString(), `Total LP should be ${totalLpBefore.add(expectedLp2).toString()} but was ${mintLiquidityAfter.supply.toString()}`);
+        assert.strictEqual(poolAccountAAfter.amount.toString(), reserveA.add(expectedUsedA).toString(), `Pool A should be ${reserveA.add(expectedUsedA).toString()} but was ${poolAccountAAfter.amount.toString()}`);
+        assert.strictEqual(poolAccountBAfter.amount.toString(), reserveB.add(expectedUsedB).toString(), `Pool B should be ${reserveB.add(expectedUsedB).toString()} but was ${poolAccountBAfter.amount.toString()}`);
+    });
+
+    it("Add liquidity with minimal amounts (1 token each)", async () => {
+        const ammIndex12 = 211;
+        const {ammPda} = await createAmm(program, signer, admin1.publicKey, fee, ammIndex12);
+        const {poolPda, mintLiquidityPda} = await createPool(program, signer, ammPda, mintA.publicKey, mintB.publicKey);
+
+        const depositorAccountA = getAssociatedTokenAddressSync(mintA.publicKey, signer.publicKey, false);
+        const depositorAccountB = getAssociatedTokenAddressSync(mintB.publicKey, signer.publicKey, false);
+        const depositorAccountLiquidity = getAssociatedTokenAddressSync(mintLiquidityPda, signer.publicKey, false);
+
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintA.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+        try {
+            await createAssociatedTokenAccount(connection, signer, mintB.publicKey, signer.publicKey);
+        } catch (err) {
+        }
+
+        const amountA = new anchor.BN(1);
+        const amountB = new anchor.BN(1);
+
+        await mintTo(connection, signer, mintA.publicKey, depositorAccountA, signer, amountA.toNumber());
+        await mintTo(connection, signer, mintB.publicKey, depositorAccountB, signer, amountB.toNumber());
+
+        await program.methods.addLiquidity(amountA, amountB).accounts({
+            pool: poolPda,
+            mintA: mintA.publicKey,
+            mintB: mintB.publicKey,
+            depositor: signer.publicKey,
+            depositorAccountA: depositorAccountA,
+            depositorAccountB: depositorAccountB,
+            payer: signer.publicKey,
+        }).signers([signer]).rpc({commitment: "confirmed"});
+
+        const lpAccount = await getAccount(connection, depositorAccountLiquidity);
+        const product = amountA.mul(amountB);
+        const expectedLp = new anchor.BN(Math.floor(Math.sqrt(Number(product))));
+        assert.strictEqual(lpAccount.amount.toString(), expectedLp.toString(), `LP amount should be ${expectedLp.toString()} but was ${lpAccount.amount.toString()}`);
+        assert.isTrue(lpAccount.amount > 0, "LP amount should be greater than zero");
+    });
 });
 
