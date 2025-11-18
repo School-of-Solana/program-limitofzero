@@ -26,6 +26,8 @@ export default function AddLiquidity() {
   const [balanceB, setBalanceB] = useState<string>("");
   const [poolReserveA, setPoolReserveA] = useState<string>("");
   const [poolReserveB, setPoolReserveB] = useState<string>("");
+  const [recommendedAmountB, setRecommendedAmountB] = useState<string>("");
+  const [userShare, setUserShare] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
 
@@ -88,6 +90,41 @@ export default function AddLiquidity() {
     }
   };
 
+  const fetchUserShare = async (pool: PoolWithIndex) => {
+    if (!publicKey || !pool) {
+      setUserShare("");
+      return;
+    }
+
+    try {
+      const mintLiquidityPda = await getMintLiquidityPda(pool.amm, pool.mintA, pool.mintB);
+      const userLpAccount = getAssociatedTokenAddressSync(mintLiquidityPda, publicKey, false);
+      
+      let userLpAmount = BigInt(0);
+      try {
+        const userAccount = await getAccount(connection, userLpAccount);
+        userLpAmount = userAccount.amount;
+      } catch (error) {
+        // User doesn't have LP tokens
+        userLpAmount = BigInt(0);
+      }
+
+      const mintInfo = await getMint(connection, mintLiquidityPda);
+      const totalSupply = mintInfo.supply;
+
+      if (totalSupply === BigInt(0)) {
+        setUserShare("0.00");
+        return;
+      }
+
+      const share = (Number(userLpAmount) / Number(totalSupply)) * 100;
+      setUserShare(share.toFixed(2));
+    } catch (error) {
+      console.error("Error fetching user share:", error);
+      setUserShare("N/A");
+    }
+  };
+
   const handlePoolSelect = async (poolAddress: string) => {
     if (!poolAddress) {
       setSelectedPool("");
@@ -98,6 +135,10 @@ export default function AddLiquidity() {
       setPoolReserveB("");
       setBalanceA("");
       setBalanceB("");
+      setAmountA("");
+      setAmountB("");
+      setRecommendedAmountB("");
+      setUserShare("");
       return;
     }
 
@@ -120,6 +161,9 @@ export default function AddLiquidity() {
       // Fetch user balances
       await fetchTokenBalance(pool.mintA.toString(), setBalanceA);
       await fetchTokenBalance(pool.mintB.toString(), setBalanceB);
+      
+      // Fetch user share
+      await fetchUserShare(pool);
     }
   };
 
@@ -138,6 +182,31 @@ export default function AddLiquidity() {
       setBalanceB("");
     }
   }, [mintB, selectedPool, publicKey, connection]);
+
+  // Calculate recommended amount B based on amount A and pool reserves
+  useEffect(() => {
+    if (!amountA || parseFloat(amountA) <= 0) {
+      setRecommendedAmountB("");
+      return;
+    }
+
+    // If pool is selected and has reserves, calculate based on pool ratio
+    if (selectedPool && poolReserveA && poolReserveB && poolReserveA !== "N/A" && poolReserveB !== "N/A") {
+      const reserveA = parseFloat(poolReserveA);
+      const reserveB = parseFloat(poolReserveB);
+      
+      if (reserveA > 0 && reserveB > 0) {
+        // Calculate required B: amountB = amountA * reserveB / reserveA
+        const recommendedB = (parseFloat(amountA) * reserveB) / reserveA;
+        setRecommendedAmountB(recommendedB.toFixed(6));
+      } else {
+        setRecommendedAmountB("");
+      }
+    } else {
+      // For new pools, suggest 1:1 ratio
+      setRecommendedAmountB(amountA);
+    }
+  }, [amountA, selectedPool, poolReserveA, poolReserveB]);
 
   const handleAddLiquidity = async () => {
     if (!publicKey || !signTransaction) {
@@ -160,9 +229,12 @@ export default function AddLiquidity() {
       const mintBPubkey = new PublicKey(mintB);
       const poolPda = await getPoolPda(ammPda, mintAPubkey, mintBPubkey);
 
-      const decimals = 9; // Assuming 9 decimals
-      const amountABN = new BN(parseFloat(amountA) * Math.pow(10, decimals));
-      const amountBBN = new BN(parseFloat(amountB) * Math.pow(10, decimals));
+      // Get actual decimals from mints
+      const mintAInfo = await getMint(connection, mintAPubkey);
+      const mintBInfo = await getMint(connection, mintBPubkey);
+      
+      const amountABN = new BN(Math.floor(parseFloat(amountA) * Math.pow(10, mintAInfo.decimals)));
+      const amountBBN = new BN(Math.floor(parseFloat(amountB) * Math.pow(10, mintBInfo.decimals)));
 
       const authorityPda = await getAuthorityPda(ammPda, mintAPubkey, mintBPubkey);
       const mintLiquidityPda = await getMintLiquidityPda(ammPda, mintAPubkey, mintBPubkey);
@@ -179,10 +251,18 @@ export default function AddLiquidity() {
           pool: poolPda,
           mintA: mintAPubkey,
           mintB: mintBPubkey,
+          authority: authorityPda,
+          mintLiquidity: mintLiquidityPda,
+          poolAccountA: poolAccountA,
+          poolAccountB: poolAccountB,
           depositor: publicKey,
+          depositorAccountLiquidity: depositorAccountLiquidity,
           depositorAccountA: depositorAccountA,
           depositorAccountB: depositorAccountB,
           payer: publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -190,6 +270,16 @@ export default function AddLiquidity() {
       
       // Refresh pools after successful operation
       await refreshPools();
+      
+      // Refresh user share
+      const pool = pools.find((p) => p.poolPda.toString() === selectedPool);
+      if (pool) {
+        await fetchUserShare(pool);
+      }
+      
+      // Clear amounts
+      setAmountA("");
+      setAmountB("");
     } catch (error: any) {
       const errorMessage = error.message || error.toString();
       let detailedError = errorMessage;
@@ -235,9 +325,14 @@ export default function AddLiquidity() {
           {selectedPool && (poolReserveA || poolReserveB) && (
             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-sm font-medium text-blue-900 mb-1">Pool Reserves:</p>
-              <p className="text-sm text-blue-700">
+              <p className="text-sm text-blue-700 mb-1">
                 Token A: {poolReserveA} | Token B: {poolReserveB}
               </p>
+              {userShare && userShare !== "N/A" && (
+                <p className="text-sm text-blue-700">
+                  Your Share: <span className="font-semibold text-blue-900">{userShare}%</span>
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -343,14 +438,43 @@ export default function AddLiquidity() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Amount B
           </label>
-          <input
-            type="number"
-            value={amountB}
-            onChange={(e) => setAmountB(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-            placeholder="0.0"
-            step="0.000000001"
-          />
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={amountB}
+                onChange={(e) => setAmountB(e.target.value)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="0.0"
+                step="0.000000001"
+              />
+              {recommendedAmountB && (
+                <button
+                  onClick={() => setAmountB(recommendedAmountB)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm whitespace-nowrap"
+                  title="Use recommended amount based on pool ratio"
+                >
+                  Use Recommended
+                </button>
+              )}
+            </div>
+            {recommendedAmountB && amountA && parseFloat(amountA) > 0 && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800">
+                  <span className="font-semibold">Recommended:</span> {recommendedAmountB} Token B
+                  {selectedPool && poolReserveA && poolReserveB && poolReserveA !== "N/A" && poolReserveB !== "N/A" ? (
+                    <span className="text-xs block mt-1 text-green-700">
+                      Based on current pool ratio ({poolReserveA} : {poolReserveB})
+                    </span>
+                  ) : (
+                    <span className="text-xs block mt-1 text-green-700">
+                      For new pools, 1:1 ratio is recommended
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
         <button
           onClick={handleAddLiquidity}
@@ -367,4 +491,5 @@ export default function AddLiquidity() {
     </div>
   );
 }
+
 

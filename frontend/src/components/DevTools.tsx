@@ -9,6 +9,7 @@ import {
   createMintToInstruction,
   getAssociatedTokenAddressSync,
   getAccount,
+  getMint,
   TOKEN_PROGRAM_ID,
   MINT_SIZE,
   getMinimumBalanceForRentExemptMint,
@@ -151,7 +152,22 @@ export default function DevTools() {
 
     try {
       const mint = new PublicKey(mintAddress);
-      const decimals = parseInt(tokenDecimals) || 9;
+      
+      // Get actual decimals from mint if it exists, otherwise use user input
+      let decimals = parseInt(tokenDecimals) || 9;
+      try {
+        const mintInfo = await getMint(connection, mint);
+        decimals = mintInfo.decimals;
+      } catch (error) {
+        // Mint doesn't exist or can't be fetched, use user input
+        if (!tokenDecimals || isNaN(parseInt(tokenDecimals))) {
+          setStatus("Please enter decimals for the mint");
+          setLoading(false);
+          return;
+        }
+        decimals = parseInt(tokenDecimals);
+      }
+      
       const supply = parseFloat(tokenSupply);
       const amount = BigInt(Math.floor(supply * Math.pow(10, decimals)));
 

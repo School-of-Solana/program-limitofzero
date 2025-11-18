@@ -1,21 +1,89 @@
 "use client";
 
 import { usePools } from "@/contexts/PoolsContext";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useEffect, useState } from "react";
+import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
+import { getMintLiquidityPda } from "@/lib/program";
+
+interface PoolShare {
+  poolPda: string;
+  share: string;
+}
 
 export default function PoolList() {
   const { pools, loading, refreshPools } = usePools();
+  const { publicKey } = useWallet();
+  const { connection } = useConnection();
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [poolShares, setPoolShares] = useState<PoolShare[]>([]);
+  const [loadingShares, setLoadingShares] = useState(false);
+
+  const fetchPoolShares = async () => {
+    if (!publicKey || pools.length === 0) {
+      setPoolShares([]);
+      return;
+    }
+
+    setLoadingShares(true);
+    try {
+      const shares = await Promise.all(
+        pools.map(async (pool) => {
+          try {
+            const mintLiquidityPda = await getMintLiquidityPda(pool.amm, pool.mintA, pool.mintB);
+            const userLpAccount = getAssociatedTokenAddressSync(mintLiquidityPda, publicKey, false);
+            
+            let userLpAmount = BigInt(0);
+            try {
+              const userAccount = await getAccount(connection, userLpAccount);
+              userLpAmount = userAccount.amount;
+            } catch (error) {
+              // User doesn't have LP tokens
+              userLpAmount = BigInt(0);
+            }
+
+            const mintInfo = await getMint(connection, mintLiquidityPda);
+            const totalSupply = mintInfo.supply;
+
+            if (totalSupply === BigInt(0)) {
+              return { poolPda: pool.poolPda.toString(), share: "0.00" };
+            }
+
+            const share = (Number(userLpAmount) / Number(totalSupply)) * 100;
+            return { poolPda: pool.poolPda.toString(), share: share.toFixed(2) };
+          } catch (error) {
+            console.error("Error fetching pool share:", error);
+            return { poolPda: pool.poolPda.toString(), share: "N/A" };
+          }
+        })
+      );
+
+      setPoolShares(shares);
+    } catch (error) {
+      console.error("Error fetching pool shares:", error);
+    } finally {
+      setLoadingShares(false);
+    }
+  };
 
   useEffect(() => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
       refreshPools();
-    }, 10000); // Refresh every 10 seconds
+    }, 60000); // Refresh every 1 minute
     
     return () => clearInterval(interval);
   }, [autoRefresh, refreshPools]);
+
+  useEffect(() => {
+    if (publicKey && pools.length > 0) {
+      fetchPoolShares();
+    } else {
+      setPoolShares([]);
+    }
+  }, [publicKey, pools]);
 
   if (loading) {
     return (
@@ -71,28 +139,49 @@ export default function PoolList() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                   Fee
                 </th>
+                {publicKey && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Your Share
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {pools.map((pool, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {pool.mintA.toString().slice(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {pool.mintB.toString().slice(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {pool.reserveA || "N/A"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {pool.reserveB || "N/A"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {pool.fee ? (pool.fee / 100).toFixed(2) + "%" : "N/A"}
-                  </td>
-                </tr>
-              ))}
+              {pools.map((pool, index) => {
+                const share = poolShares.find((s) => s.poolPda === pool.poolPda.toString());
+                return (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pool.mintA.toString().slice(0, 8)}...
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pool.mintB.toString().slice(0, 8)}...
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pool.reserveA || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pool.reserveB || "N/A"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {pool.fee ? (pool.fee / 100).toFixed(2) + "%" : "N/A"}
+                    </td>
+                    {publicKey && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {loadingShares ? (
+                          <span className="text-gray-400">Loading...</span>
+                        ) : share ? (
+                          <span className={parseFloat(share.share) > 0 ? "font-semibold text-green-600" : ""}>
+                            {share.share}%
+                          </span>
+                        ) : (
+                          "N/A"
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
