@@ -113,7 +113,6 @@ pub struct WithdrawLiquidity<'info> {
     )]
     pub authority: AccountInfo<'info>,
 
-    /// The account paying for all rents
     pub depositor: Signer<'info>,
 
     #[account(

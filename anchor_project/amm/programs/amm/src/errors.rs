@@ -18,4 +18,8 @@ pub enum AmmError {
     LpSupplyIsZero,
     #[msg("Insufficient balance of LP token")]
     InsufficientLpBalance,
+    #[msg("Min output amount is bigger than amount")]
+    MinOutputIsBiggerThanInput,
+    #[msg("Output amount is less than expected min")]
+    OutputAmountTooLow,
 }
