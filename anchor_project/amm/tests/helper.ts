@@ -217,3 +217,49 @@ export async function getPoolReserves(
     reserveB: new anchor.BN(poolAccountB.amount.toString())
   };
 }
+
+export interface WithdrawLiquidityResult {
+  amountAOut: anchor.BN;
+  amountBOut: anchor.BN;
+}
+
+export async function withdrawLiquidity(
+  program: Program<Amm>,
+  connection: Connection,
+  signer: Keypair,
+  poolPda: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  mintLiquidityPda: PublicKey,
+  authorityPda: PublicKey,
+  lpAmountToBurn: anchor.BN
+): Promise<WithdrawLiquidityResult> {
+  const depositorAccountLiquidity = getAssociatedTokenAddressSync(mintLiquidityPda, signer.publicKey, false);
+  const depositorAccountA = getAssociatedTokenAddressSync(mintA, signer.publicKey, false);
+  const depositorAccountB = getAssociatedTokenAddressSync(mintB, signer.publicKey, false);
+
+  const poolAccountA = await getAccount(connection, getAssociatedTokenAddressSync(mintA, authorityPda, true));
+  const poolAccountB = await getAccount(connection, getAssociatedTokenAddressSync(mintB, authorityPda, true));
+
+  const reserveABefore = new anchor.BN(poolAccountA.amount.toString());
+  const reserveBBefore = new anchor.BN(poolAccountB.amount.toString());
+  const mintLiquidity = await getMint(connection, mintLiquidityPda);
+  const totalLp = new anchor.BN(mintLiquidity.supply.toString());
+
+  const expectedAmountAOut = lpAmountToBurn.mul(reserveABefore).div(totalLp);
+  const expectedAmountBOut = lpAmountToBurn.mul(reserveBBefore).div(totalLp);
+
+  await program.methods.withdrawLiquidity(lpAmountToBurn).accounts({
+    pool: poolPda,
+    mintA: mintA,
+    mintB: mintB,
+    mintLiquidity: mintLiquidityPda,
+    depositor: signer.publicKey,
+    depositorAccountLiquidity: depositorAccountLiquidity,
+    depositorAccountA: depositorAccountA,
+    depositorAccountB: depositorAccountB,
+    payer: signer.publicKey,
+  }).signers([signer]).rpc({commitment: "confirmed"});
+
+  return {amountAOut: expectedAmountAOut, amountBOut: expectedAmountBOut};
+}
