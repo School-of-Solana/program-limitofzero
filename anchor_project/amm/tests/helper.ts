@@ -2,8 +2,9 @@ import { Connection, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import {assert} from "chai";
 import { Amm } from "../target/types/amm";
-import { createMint } from "@solana/spl-token";
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { Program } from "@coral-xyz/anchor";
+import { createMint, createAssociatedTokenAccount, getAccount, getAssociatedTokenAddressSync, getMint, mintTo } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export async function airdrop(connection: Connection, address: PublicKey, amount = 1_000_000_000) {
   await connection.confirmTransaction(await connection.requestAirdrop(address, amount), "confirmed");
@@ -146,5 +147,73 @@ export async function createPool(
     authorityPda,
     poolAccountA,
     poolAccountB,
+  };
+}
+
+export interface AddLiquidityResult {
+  lpAmount: anchor.BN;
+}
+
+export async function addLiquidity(
+  program: Program<Amm>,
+  connection: Connection,
+  signer: Keypair,
+  mintAuthority: Keypair,
+  poolPda: PublicKey,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  mintLiquidityPda: PublicKey,
+  amountA: anchor.BN,
+  amountB: anchor.BN
+): Promise<AddLiquidityResult> {
+  const depositorAccountA = getAssociatedTokenAddressSync(mintA, signer.publicKey, false);
+  const depositorAccountB = getAssociatedTokenAddressSync(mintB, signer.publicKey, false);
+  const depositorAccountLiquidity = getAssociatedTokenAddressSync(mintLiquidityPda, signer.publicKey, false);
+
+  try {
+    await createAssociatedTokenAccount(connection, signer, mintA, signer.publicKey);
+  } catch (err) {
+    // Account might already exist
+  }
+  try {
+    await createAssociatedTokenAccount(connection, signer, mintB, signer.publicKey);
+  } catch (err) {
+    // Account might already exist
+  }
+
+  await mintTo(connection, mintAuthority, mintA, depositorAccountA, mintAuthority, amountA.toNumber());
+  await mintTo(connection, mintAuthority, mintB, depositorAccountB, mintAuthority, amountB.toNumber());
+
+  await program.methods.addLiquidity(amountA, amountB).accounts({
+    pool: poolPda,
+    mintA: mintA,
+    mintB: mintB,
+    depositor: signer.publicKey,
+    depositorAccountA: depositorAccountA,
+    depositorAccountB: depositorAccountB,
+    payer: signer.publicKey,
+  }).signers([signer]).rpc({commitment: "confirmed"});
+
+  const lpAccount = await getAccount(connection, depositorAccountLiquidity);
+  return {lpAmount: new anchor.BN(lpAccount.amount.toString())};
+}
+
+export interface GetPoolReservesResult {
+  reserveA: anchor.BN;
+  reserveB: anchor.BN;
+}
+
+export async function getPoolReserves(
+  connection: Connection,
+  mintA: PublicKey,
+  mintB: PublicKey,
+  authorityPda: PublicKey
+): Promise<GetPoolReservesResult> {
+  const poolAccountA = await getAccount(connection, getAssociatedTokenAddressSync(mintA, authorityPda, true));
+  const poolAccountB = await getAccount(connection, getAssociatedTokenAddressSync(mintB, authorityPda, true));
+
+  return {
+    reserveA: new anchor.BN(poolAccountA.amount.toString()),
+    reserveB: new anchor.BN(poolAccountB.amount.toString())
   };
 }
