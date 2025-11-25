@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import CopyableAddress from "./CopyableAddress";
+import { useSavedMints } from "@/hooks/useSavedMints";
 
 interface TokenBalance {
   mint: string;
@@ -17,9 +18,16 @@ interface TokenBalance {
 export default function TokenBalance() {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
+  const { savedMints } = useSavedMints();
   const [tokens, setTokens] = useState<TokenBalance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Helper to get token name from saved mints
+  const getTokenName = (mintAddress: string): string | undefined => {
+    const savedMint = savedMints.find((m) => m.address === mintAddress);
+    return savedMint?.name;
+  };
 
   const fetchTokenBalances = async () => {
     if (!publicKey) {
@@ -147,25 +155,32 @@ export default function TokenBalance() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tokens.map((token, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <CopyableAddress address={token.mint} short={true} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {token.uiAmount.toLocaleString(undefined, {
-                        maximumFractionDigits: token.decimals,
-                      })}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-xs font-mono text-gray-500">
-                      {token.tokenAccount.slice(0, 8)}...{token.tokenAccount.slice(-8)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {tokens.map((token, index) => {
+                const tokenName = getTokenName(token.mint);
+                return (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <CopyableAddress 
+                        address={token.mint} 
+                        short={true} 
+                        displayName={tokenName}
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {token.uiAmount.toLocaleString(undefined, {
+                          maximumFractionDigits: token.decimals,
+                        })}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-xs font-mono text-gray-500">
+                        {token.tokenAccount.slice(0, 8)}...{token.tokenAccount.slice(-8)}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
 import { getMintLiquidityPda } from "@/lib/program";
 import CopyableAddress from "./CopyableAddress";
+import { useSavedMints } from "@/hooks/useSavedMints";
 
 interface PoolShare {
   poolPda: string;
@@ -17,9 +18,16 @@ export default function PoolList() {
   const { pools, loading, refreshPools } = usePools();
   const { publicKey } = useWallet();
   const { connection } = useConnection();
+  const { savedMints } = useSavedMints();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [poolShares, setPoolShares] = useState<PoolShare[]>([]);
   const [loadingShares, setLoadingShares] = useState(false);
+
+  // Helper to get token name from saved mints
+  const getTokenName = (mintAddress: string): string | undefined => {
+    const savedMint = savedMints.find((m) => m.address === mintAddress);
+    return savedMint?.name;
+  };
 
   const fetchPoolShares = async () => {
     if (!publicKey || pools.length === 0) {
@@ -150,13 +158,23 @@ export default function PoolList() {
             <tbody className="bg-white divide-y divide-gray-200">
               {pools.map((pool, index) => {
                 const share = poolShares.find((s) => s.poolPda === pool.poolPda.toString());
+                const mintAName = getTokenName(pool.mintA.toString());
+                const mintBName = getTokenName(pool.mintB.toString());
                 return (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <CopyableAddress address={pool.mintA.toString()} short={true} />
+                      <CopyableAddress 
+                        address={pool.mintA.toString()} 
+                        short={true}
+                        displayName={mintAName}
+                      />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <CopyableAddress address={pool.mintB.toString()} short={true} />
+                      <CopyableAddress 
+                        address={pool.mintB.toString()} 
+                        short={true}
+                        displayName={mintBName}
+                      />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {pool.reserveA || "N/A"}

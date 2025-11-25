@@ -8,6 +8,7 @@ const STORAGE_KEY = "amm_dev_saved_mints";
 export interface SavedMint {
   address: string;
   name?: string;
+  symbol?: string;
   decimals: number;
   createdAt: number;
 }
@@ -47,11 +48,20 @@ export function useSavedMints() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
+  const updateMintSymbol = (address: string, symbol: string) => {
+    const updated = savedMints.map((m) =>
+      m.address === address ? { ...m, symbol } : m
+    );
+    setSavedMints(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
   return {
     savedMints,
     saveMint,
     removeMint,
     updateMintName,
+    updateMintSymbol,
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useState } from "react";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { useSavedMints } from "@/hooks/useSavedMints";
 import {
   createInitializeMintInstruction,
@@ -19,40 +19,30 @@ import {
 import { SystemProgram, Keypair, Transaction } from "@solana/web3.js";
 import StatusMessage from "./StatusMessage";
 import CopyableAddress from "./CopyableAddress";
+import { usePools } from "@/contexts/PoolsContext";
 
 export default function DevTools() {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const { connection } = useConnection();
-  const { savedMints, saveMint, removeMint, updateMintName } = useSavedMints();
-  const [solAmount, setSolAmount] = useState<string>("1");
+  const { savedMints, saveMint, removeMint, updateMintName, updateMintSymbol } = useSavedMints();
+  const { pools } = usePools();
   const [tokenName, setTokenName] = useState<string>("");
+  const [tokenSymbol, setTokenSymbol] = useState<string>("");
   const [tokenDecimals, setTokenDecimals] = useState<string>("9");
   const [tokenSupply, setTokenSupply] = useState<string>("1000000");
   const [mintAddress, setMintAddress] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
 
-  const handleAirdrop = async () => {
-    if (!publicKey) {
-      setStatus("Please connect your wallet");
-      return;
-    }
-
-    setLoading(true);
-    setStatus("");
-
-    try {
-      const amount = parseFloat(solAmount) * LAMPORTS_PER_SOL;
-      const signature = await connection.requestAirdrop(publicKey, amount);
-      await connection.confirmTransaction(signature, "confirmed");
-      setStatus(`Success! Airdropped ${solAmount} SOL.\nSignature: ${signature}`);
-    } catch (error: any) {
-      const errorMessage = error.message || error.toString();
-      setStatus(`Error: ${errorMessage}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Get unique mint addresses from all active pools
+  const poolTokens = Array.from(
+    new Set(
+      pools.flatMap((pool) => [
+        pool.mintA.toString(),
+        pool.mintB.toString(),
+      ])
+    )
+  ).sort();
 
   const handleCreateMint = async () => {
     if (!publicKey || !signTransaction) {
@@ -120,9 +110,14 @@ export default function DevTools() {
       saveMint({
         address: mintStr,
         name: tokenName || undefined,
+        symbol: tokenSymbol || undefined,
         decimals,
         createdAt: Date.now(),
       });
+      
+      // Clear form fields
+      setTokenName("");
+      setTokenSymbol("");
       
       setStatus(`Success! Created mint: ${mintStr}`);
     } catch (error: any) {
@@ -251,33 +246,6 @@ export default function DevTools() {
       <p className="text-sm text-gray-600 mb-6">Development utilities for testing</p>
 
       <div className="space-y-6">
-        {/* Airdrop SOL */}
-        <div className="border-b pb-6">
-          <h3 className="text-lg font-semibold mb-3">Airdrop SOL</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount (SOL)
-              </label>
-              <input
-                type="number"
-                value={solAmount}
-                onChange={(e) => setSolAmount(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                placeholder="1"
-                step="0.1"
-              />
-            </div>
-            <button
-              onClick={handleAirdrop}
-              disabled={loading}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
-            >
-              {loading ? "Processing..." : "Airdrop SOL"}
-            </button>
-          </div>
-        </div>
-
         {/* Create Mint */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-3">Create Token Mint</h3>
@@ -293,6 +261,22 @@ export default function DevTools() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 placeholder="My Token"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Token Symbol (optional)
+              </label>
+              <input
+                type="text"
+                value={tokenSymbol}
+                onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="MTK"
+                maxLength={10}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Short symbol for the token (e.g., USDC, SOL, BTC)
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -334,13 +318,36 @@ export default function DevTools() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Mint Address (or use created mint above)
               </label>
-              <input
-                type="text"
-                value={mintAddress}
-                onChange={(e) => setMintAddress(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter mint address"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={mintAddress}
+                  onChange={(e) => setMintAddress(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter mint address"
+                />
+                {poolTokens.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) setMintAddress(e.target.value);
+                    }}
+                    className="px-3 py-2 border border-gray-300 rounded-md bg-gray-50 focus:ring-2 focus:ring-blue-500"
+                    value=""
+                  >
+                    <option value="">Select from pools...</option>
+                    {poolTokens.map((token) => (
+                      <option key={token} value={token}>
+                        {token.slice(0, 8)}...{token.slice(-8)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {poolTokens.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {poolTokens.length} token{poolTokens.length !== 1 ? "s" : ""} available in active pools
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -376,13 +383,26 @@ export default function DevTools() {
                   className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <input
                         type="text"
                         value={mint.name || ""}
                         onChange={(e) => updateMintName(mint.address, e.target.value)}
                         placeholder="Token name"
                         className="text-sm font-medium border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 px-2 py-1 rounded"
+                      />
+                      {mint.symbol && (
+                        <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          {mint.symbol}
+                        </span>
+                      )}
+                      <input
+                        type="text"
+                        value={mint.symbol || ""}
+                        onChange={(e) => updateMintSymbol(mint.address, e.target.value.toUpperCase())}
+                        placeholder="Symbol"
+                        className="text-xs font-medium border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 px-2 py-1 rounded w-16"
+                        maxLength={10}
                       />
                       <span className="text-xs text-gray-500">
                         ({mint.decimals} decimals)
