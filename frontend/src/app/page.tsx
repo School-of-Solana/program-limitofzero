@@ -15,7 +15,6 @@ import TokenBalance from "@/components/TokenBalance";
 export default function Home() {
   const { connected } = useWallet();
   const [activeTab, setActiveTab] = useState<"create-amm" | "create-pool" | "add-liquidity" | "withdraw-liquidity" | "swap" | "pools" | "dev-tools" | "tokens">("pools");
-  const isDev = process.env.NODE_ENV === "development";
 
   return (
     <div className="min-h-screen p-8">
@@ -103,18 +102,16 @@ export default function Home() {
                 >
                   Swap
                 </button>
-                {isDev && (
-                  <button
-                    onClick={() => setActiveTab("dev-tools")}
-                    className={`px-4 py-2 font-semibold ${
-                      activeTab === "dev-tools"
-                        ? "border-b-2 border-blue-500 text-blue-600"
-                        : "text-gray-600 hover:text-gray-800"
-                    }`}
-                  >
-                    Dev Tools
-                  </button>
-                )}
+                <button
+                  onClick={() => setActiveTab("dev-tools")}
+                  className={`px-4 py-2 font-semibold ${
+                    activeTab === "dev-tools"
+                      ? "border-b-2 border-blue-500 text-blue-600"
+                      : "text-gray-600 hover:text-gray-800"
+                  }`}
+                >
+                  Dev Tools
+                </button>
               </div>
 
               <div className="mt-8">
@@ -125,7 +122,7 @@ export default function Home() {
                 {activeTab === "add-liquidity" && <AddLiquidity />}
                 {activeTab === "withdraw-liquidity" && <WithdrawLiquidity />}
                 {activeTab === "swap" && <Swap />}
-                {activeTab === "dev-tools" && isDev && <DevTools />}
+                {activeTab === "dev-tools" && <DevTools />}
               </div>
             </>
           )}

@@ -4,6 +4,7 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import CopyableAddress from "./CopyableAddress";
 
 interface TokenBalance {
   mint: string;
@@ -149,9 +150,7 @@ export default function TokenBalance() {
               {tokens.map((token, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-mono text-gray-900">
-                      {token.mint.slice(0, 8)}...{token.mint.slice(-8)}
-                    </div>
+                    <CopyableAddress address={token.mint} short={true} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">

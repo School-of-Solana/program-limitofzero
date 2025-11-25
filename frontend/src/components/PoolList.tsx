@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
 import { getMintLiquidityPda } from "@/lib/program";
+import CopyableAddress from "./CopyableAddress";
 
 interface PoolShare {
   poolPda: string;
@@ -151,11 +152,11 @@ export default function PoolList() {
                 const share = poolShares.find((s) => s.poolPda === pool.poolPda.toString());
                 return (
                   <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {pool.mintA.toString().slice(0, 8)}...
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <CopyableAddress address={pool.mintA.toString()} short={true} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {pool.mintB.toString().slice(0, 8)}...
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <CopyableAddress address={pool.mintB.toString()} short={true} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {pool.reserveA || "N/A"}

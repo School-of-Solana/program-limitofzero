@@ -10,6 +10,7 @@ import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGR
 import { BN } from "@coral-xyz/anchor";
 import { SystemProgram } from "@solana/web3.js";
 import StatusMessage from "./StatusMessage";
+import CopyableAddress from "./CopyableAddress";
 
 export default function AddLiquidity() {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -362,6 +363,9 @@ export default function AddLiquidity() {
               placeholder="Enter mint A public key"
               disabled={!!selectedPool}
             />
+            {mintA && (
+              <CopyableAddress address={mintA} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && !selectedPool && (
               <select
                 onChange={(e) => {
@@ -398,6 +402,9 @@ export default function AddLiquidity() {
               placeholder="Enter mint B public key"
               disabled={!!selectedPool}
             />
+            {mintB && (
+              <CopyableAddress address={mintB} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && !selectedPool && (
               <select
                 onChange={(e) => {

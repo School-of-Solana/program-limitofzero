@@ -18,6 +18,7 @@ import {
 } from "@solana/spl-token";
 import { SystemProgram, Keypair, Transaction } from "@solana/web3.js";
 import StatusMessage from "./StatusMessage";
+import CopyableAddress from "./CopyableAddress";
 
 export default function DevTools() {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -316,9 +317,10 @@ export default function DevTools() {
             </button>
             {mintAddress && (
               <div className="mt-2 p-3 bg-blue-50 rounded-md">
-                <p className="text-sm text-gray-700">
-                  <strong>Mint Address:</strong> {mintAddress}
+                <p className="text-sm text-gray-700 mb-2">
+                  <strong>Mint Address:</strong>
                 </p>
+                <CopyableAddress address={mintAddress} />
               </div>
             )}
           </div>
@@ -386,9 +388,9 @@ export default function DevTools() {
                         ({mint.decimals} decimals)
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1 font-mono">
-                      {mint.address.slice(0, 8)}...{mint.address.slice(-8)}
-                    </p>
+                    <div className="mt-1">
+                      <CopyableAddress address={mint.address} short={true} className="text-xs" />
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button

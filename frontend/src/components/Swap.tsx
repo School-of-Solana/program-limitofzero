@@ -10,6 +10,7 @@ import { BN } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
 import { SystemProgram } from "@solana/web3.js";
 import StatusMessage from "./StatusMessage";
+import CopyableAddress from "./CopyableAddress";
 
 
 export default function Swap() {
@@ -404,6 +405,9 @@ export default function Swap() {
               placeholder="Enter mint A public key"
               disabled={!!selectedPool}
             />
+            {mintA && (
+              <CopyableAddress address={mintA} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && !selectedPool && (
               <select
                 onChange={(e) => {
@@ -440,6 +444,9 @@ export default function Swap() {
               placeholder="Enter mint B public key"
               disabled={!!selectedPool}
             />
+            {mintB && (
+              <CopyableAddress address={mintB} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && !selectedPool && (
               <select
                 onChange={(e) => {

@@ -6,6 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useSavedMints } from "@/hooks/useSavedMints";
 import { usePools } from "@/contexts/PoolsContext";
 import StatusMessage from "./StatusMessage";
+import CopyableAddress from "./CopyableAddress";
 import { getProgram, getAmmPda, getPoolPda, getAuthorityPda, getMintLiquidityPda } from "@/lib/program";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, getMint } from "@solana/spl-token";
 import { SystemProgram } from "@solana/web3.js";
@@ -163,6 +164,9 @@ export default function CreatePool() {
               className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               placeholder="Enter mint A public key"
             />
+            {mintA && (
+              <CopyableAddress address={mintA} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && (
               <select
                 onChange={(e) => {
@@ -198,6 +202,9 @@ export default function CreatePool() {
               className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               placeholder="Enter mint B public key"
             />
+            {mintB && (
+              <CopyableAddress address={mintB} short={false} className="flex-shrink-0" />
+            )}
             {savedMints.length > 0 && (
               <select
                 onChange={(e) => {
