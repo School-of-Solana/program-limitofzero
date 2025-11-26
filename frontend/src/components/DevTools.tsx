@@ -1,7 +1,7 @@
 "use client";
 
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useSavedMints } from "@/hooks/useSavedMints";
 import {
@@ -15,11 +15,11 @@ import {
   createAssociatedTokenAccountInstruction,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { SystemProgram, Keypair, Transaction } from "@solana/web3.js";
+import { Keypair, Transaction, SystemProgram } from "@solana/web3.js";
 import StatusMessage from "./StatusMessage";
 import CopyableAddress from "./CopyableAddress";
 import { usePools } from "@/contexts/PoolsContext";
-import { getCachedMint } from "@/lib/mintCache";
+import { getCachedMint, removeMintFromCache } from "@/lib/mintCache";
 
 export default function DevTools() {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -34,14 +34,39 @@ export default function DevTools() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
 
-  const poolTokens = Array.from(
-    new Set(
-      pools.flatMap((pool) => [
-        pool.mintA.toString(),
-        pool.mintB.toString(),
-      ])
-    )
-  ).sort();
+  const poolTokens = useMemo(() => {
+    if (!pools || !Array.isArray(pools) || pools.length === 0) {
+      return [];
+    }
+    
+    try {
+      const tokens: string[] = [];
+      for (const pool of pools) {
+        if (!pool) continue;
+        try {
+          if (pool.mintA) {
+            const str = pool.mintA instanceof PublicKey ? pool.mintA.toString() : (typeof pool.mintA === 'string' ? pool.mintA : null);
+            if (str && typeof str === 'string' && str.length > 0) {
+              tokens.push(str);
+            }
+          }
+          if (pool.mintB) {
+            const str = pool.mintB instanceof PublicKey ? pool.mintB.toString() : (typeof pool.mintB === 'string' ? pool.mintB : null);
+            if (str && typeof str === 'string' && str.length > 0) {
+              tokens.push(str);
+            }
+          }
+        } catch (e) {
+          // Skip invalid pools
+          continue;
+        }
+      }
+      return Array.from(new Set(tokens)).sort();
+    } catch (e) {
+      console.error("Error computing poolTokens:", e);
+      return [];
+    }
+  }, [pools]);
 
   const handleCreateMint = async () => {
     if (!publicKey || !signTransaction) {
@@ -60,9 +85,10 @@ export default function DevTools() {
         return;
       }
 
-      const lamports = await getMinimumBalanceForRentExemptMint(connection);
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey;
+
+      const lamports = await getMinimumBalanceForRentExemptMint(connection);
 
       const transaction = new Transaction().add(
         SystemProgram.createAccount({
@@ -85,30 +111,58 @@ export default function DevTools() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
       transaction.partialSign(mintKeypair);
+      
       const signed = await signTransaction(transaction);
       const signature = await connection.sendRawTransaction(signed.serialize());
       await connection.confirmTransaction(signature, "confirmed");
 
       const mintStr = mint.toString();
-      setMintAddress(mintStr);
+      if (!mintStr || typeof mintStr !== 'string' || mintStr === 'undefined' || mintStr === 'null') {
+        console.error("Invalid mint string:", mintStr, typeof mintStr);
+        throw new Error("Failed to convert mint to string");
+      }
+
+      console.log("Mint created successfully:", mintStr);
       
-      saveMint({
-        address: mintStr,
-        name: tokenName || undefined,
-        symbol: tokenSymbol || undefined,
-        decimals,
-        createdAt: Date.now(),
-      });
+      // Удаляем из кеша на случай если там был старый минт с таким адресом
+      removeMintFromCache(mintStr);
+      
+      try {
+        setMintAddress(mintStr);
+        
+        const mintData = {
+          address: mintStr,
+          name: tokenName || undefined,
+          symbol: tokenSymbol || undefined,
+          decimals,
+          createdAt: Date.now(),
+        };
+        
+        console.log("Saving mint data:", mintData);
+        saveMint(mintData);
+        console.log("Mint saved successfully");
+      } catch (saveError: any) {
+        console.error("Error saving mint:", saveError);
+        console.error("Error stack:", saveError.stack);
+        throw new Error(`Failed to save mint: ${saveError.message}`);
+      }
       
       setTokenName("");
       setTokenSymbol("");
       
       setStatus(`Success! Created mint: ${mintStr}`);
     } catch (error: any) {
+      console.error("Error creating mint:", error);
+      console.error("Error stack:", error.stack);
+      
       const errorMessage = error.message || error.toString();
       let detailedError = errorMessage;
       if (error.logs && Array.isArray(error.logs)) {
         detailedError += `\n\nLogs:\n${error.logs.join("\n")}`;
+        console.error("Error logs:", error.logs);
+      }
+      if (error.stack) {
+        console.error("Full error stack:", error.stack);
       }
       setStatus(`Error: ${detailedError}`);
     } finally {
@@ -199,10 +253,17 @@ export default function DevTools() {
       
       setStatus(`Success! Minted ${tokenSupply} tokens.\nSignature: ${signature}`);
     } catch (error: any) {
+      console.error("Error minting tokens:", error);
+      console.error("Error stack:", error.stack);
+      
       const errorMessage = error.message || error.toString();
       let detailedError = errorMessage;
       if (error.logs && Array.isArray(error.logs)) {
         detailedError += `\n\nLogs:\n${error.logs.join("\n")}`;
+        console.error("Error logs:", error.logs);
+      }
+      if (error.stack) {
+        console.error("Full error stack:", error.stack);
       }
       setStatus(`Error: ${detailedError}`);
     } finally {
@@ -305,9 +366,9 @@ export default function DevTools() {
                     value=""
                   >
                     <option value="">Select from pools...</option>
-                    {poolTokens.map((token) => (
+                    {poolTokens.filter(token => token && typeof token === 'string').map((token) => (
                       <option key={token} value={token}>
-                        {token.slice(0, 8)}...{token.slice(-8)}
+                        {token && token.length > 8 ? `${token.slice(0, 8)}...${token.slice(-8)}` : token}
                       </option>
                     ))}
                   </select>
