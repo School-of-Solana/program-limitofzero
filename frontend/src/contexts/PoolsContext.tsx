@@ -40,7 +40,6 @@ export function PoolsProvider({ children }: { children: ReactNode }) {
       const program = getProgram(connection, { publicKey, signTransaction, signAllTransactions } as any);
       const allPools = await getAllPools(program);
       
-      // Fetch AMM data to get index and fee for each pool
       const poolsWithIndex = await Promise.all(
         allPools.map(async (pool) => {
           try {
@@ -52,7 +51,6 @@ export function PoolsProvider({ children }: { children: ReactNode }) {
             const ammData = await accountNamespace.amm.fetch(pool.amm);
             const poolPda = await getPoolPda(pool.amm, pool.mintA, pool.mintB);
             
-            // Get pool reserves
             try {
               const authorityPda = await getAuthorityPda(pool.amm, pool.mintA, pool.mintB);
               const poolAccountA = getAssociatedTokenAddressSync(pool.mintA, authorityPda, true);
@@ -75,7 +73,6 @@ export function PoolsProvider({ children }: { children: ReactNode }) {
                 fee: ammData.fee,
               };
             } catch (error) {
-              // If can't fetch reserves, still return pool without reserves
               return {
                 ...pool,
                 ammIndex: ammData.index,

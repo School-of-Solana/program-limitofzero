@@ -19,7 +19,6 @@ export default function Swap() {
   const { savedMints } = useSavedMints();
   const { pools, loading: loadingPools, refreshPools } = usePools();
 
-  // Helper to get token name from saved mints
   const getTokenName = (mintAddress: string): string | undefined => {
     const savedMint = savedMints.find((m) => m.address === mintAddress);
     return savedMint?.name;
@@ -59,7 +58,6 @@ export default function Swap() {
         const balance = (Number(account.amount) / Math.pow(10, mintInfo.decimals)).toFixed(6);
         setBalance(balance);
       } catch (error) {
-        // Token account doesn't exist
         setBalance("0.000000");
       }
     } catch (error) {
@@ -76,7 +74,6 @@ export default function Swap() {
     }
 
     try {
-      // Use reserves from context if available
       if (pool.reserveA && pool.reserveB && pool.reserveA !== "N/A" && pool.reserveB !== "N/A") {
         setPoolReserveA(pool.reserveA);
         setPoolReserveB(pool.reserveB);
@@ -97,11 +94,9 @@ export default function Swap() {
         setPoolReserveB(reserveB);
       }
       
-      // Use fee from context if available
       if (pool.fee !== undefined) {
         setPoolFee(pool.fee);
       } else {
-        // Fetch AMM fee
         try {
           const program = getProgram(connection, { publicKey, signTransaction, signAllTransactions } as any);
           const accountNamespace = program.account as unknown as {
@@ -135,7 +130,6 @@ export default function Swap() {
       const mintAInfo = await getMint(connection, pool.mintA);
       const mintBInfo = await getMint(connection, pool.mintB);
       
-      // Get raw reserves from pool accounts
       const authorityPda = await getAuthorityPda(pool.amm, pool.mintA, pool.mintB);
       const poolAccountA = getAssociatedTokenAddressSync(pool.mintA, authorityPda, true);
       const poolAccountB = getAssociatedTokenAddressSync(pool.mintB, authorityPda, true);
@@ -143,7 +137,6 @@ export default function Swap() {
       const accountA = await getAccount(connection, poolAccountA);
       const accountB = await getAccount(connection, poolAccountB);
       
-      // Raw reserves (in token's native units)
       const inputReserveRaw = isSwapA ? accountA.amount : accountB.amount;
       const outputReserveRaw = isSwapA ? accountB.amount : accountA.amount;
       const inputDecimals = isSwapA ? mintAInfo.decimals : mintBInfo.decimals;
@@ -159,27 +152,18 @@ export default function Swap() {
       const amount = parseFloat(swapAmount);
       const amountRaw = BigInt(Math.floor(amount * Math.pow(10, inputDecimals)));
       
-      // Calculate effective amount after fee
       const feeBps = poolFee;
       const percent = BigInt(10000 - feeBps);
       const amountEff = (amountRaw * percent) / BigInt(10000);
       
-      // Constant product formula: k = x * y
       const k = inputReserveRaw * outputReserveRaw;
-      
-      // New input reserve after swap
       const newInputReserve = inputReserveRaw + amountEff;
-      
-      // New output reserve
       const newOutputReserve = k / newInputReserve;
-      
-      // Output amount (in raw format)
       const outputAmountRaw = outputReserveRaw - newOutputReserve;
       const outputAmount = Number(outputAmountRaw) / Math.pow(10, outputDecimals);
       
       setEstimatedOutput(outputAmount.toFixed(6));
       
-      // Calculate slippage
       const inputReserveUI = Number(inputReserveRaw) / Math.pow(10, inputDecimals);
       const outputReserveUI = Number(outputReserveRaw) / Math.pow(10, outputDecimals);
       const spotPrice = outputReserveUI / inputReserveUI;
@@ -188,8 +172,7 @@ export default function Swap() {
       
       setSlippage(slippagePercent.toFixed(2));
       
-      // Recommend min_out with 1% slippage tolerance
-      const recommendedMin = outputAmount * 0.99; // 1% slippage tolerance
+      const recommendedMin = outputAmount * 0.99;
       setRecommendedMinOut(recommendedMin.toFixed(6));
     } catch (error) {
       console.error("Error calculating swap output:", error);
@@ -224,10 +207,7 @@ export default function Swap() {
       setMintA(pool.mintA.toString());
       setMintB(pool.mintB.toString());
       
-      // Fetch pool reserves and fee
       await fetchPoolReserves(pool);
-      
-      // Fetch user balances
       await fetchTokenBalance(pool.mintA.toString(), setBalanceA);
       await fetchTokenBalance(pool.mintB.toString(), setBalanceB);
     }
@@ -283,7 +263,6 @@ export default function Swap() {
       const mintBPubkey = new PublicKey(mintB);
       const poolPda = await getPoolPda(ammPda, mintAPubkey, mintBPubkey);
 
-      // Get actual decimals from mints
       const mintAInfo = await getMint(connection, mintAPubkey);
       const mintBInfo = await getMint(connection, mintBPubkey);
       
@@ -320,8 +299,6 @@ export default function Swap() {
         .rpc();
 
       setStatus(`Success! Swap completed.\nTransaction: ${tx}`);
-      
-      // Refresh pools after successful operation
       await refreshPools();
     } catch (error: any) {
       const errorMessage = error.message || error.toString();

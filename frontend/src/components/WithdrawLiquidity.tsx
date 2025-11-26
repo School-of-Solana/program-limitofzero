@@ -17,7 +17,6 @@ export default function WithdrawLiquidity() {
   const { pools, loading: loadingPools, refreshPools } = usePools();
   const { savedMints } = useSavedMints();
 
-  // Helper to get token name from saved mints
   const getTokenName = (mintAddress: string): string | undefined => {
     const savedMint = savedMints.find((m) => m.address === mintAddress);
     return savedMint?.name;
@@ -51,8 +50,6 @@ export default function WithdrawLiquidity() {
         const mintInfo = await getMint(connection, mintLiquidityPda);
         const balance = (Number(account.amount) / Math.pow(10, mintInfo.decimals)).toFixed(6);
         setLpBalance(balance);
-        
-        // Also get total LP supply
         const totalSupply = (Number(mintInfo.supply) / Math.pow(10, mintInfo.decimals)).toFixed(6);
         setTotalLp(totalSupply);
       } catch (error) {
@@ -124,8 +121,6 @@ export default function WithdrawLiquidity() {
       const reserveB = new BN(accountB.amount.toString());
       
       const lpAmountBN = new BN(Math.floor(parseFloat(lpAmountToBurn) * Math.pow(10, mintLiquidityInfo.decimals)));
-      
-      // Calculate: amount_out = (lp_to_burn * reserve) / total_lp
       const amountAOut = lpAmountBN.mul(reserveA).div(totalLpSupply);
       const amountBOut = lpAmountBN.mul(reserveB).div(totalLpSupply);
       
@@ -164,8 +159,6 @@ export default function WithdrawLiquidity() {
       setAmmIndex(pool.ammIndex.toString());
       setMintA(pool.mintA.toString());
       setMintB(pool.mintB.toString());
-      
-      // Fetch LP balance and pool reserves
       await fetchLpBalance(pool);
       await fetchPoolReserves(pool);
     }

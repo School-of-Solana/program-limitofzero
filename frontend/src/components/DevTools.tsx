@@ -34,7 +34,6 @@ export default function DevTools() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
 
-  // Get unique mint addresses from all active pools
   const poolTokens = Array.from(
     new Set(
       pools.flatMap((pool) => [
@@ -61,16 +60,11 @@ export default function DevTools() {
         return;
       }
 
-      // Calculate rent for mint account
       const lamports = await getMinimumBalanceForRentExemptMint(connection);
-
-      // Generate keypair for mint (we'll create the account)
       const mintKeypair = Keypair.generate();
       const mint = mintKeypair.publicKey;
 
-      // Create transaction
       const transaction = new Transaction().add(
-        // Create account
         SystemProgram.createAccount({
           fromPubkey: publicKey,
           newAccountPubkey: mint,
@@ -78,35 +72,26 @@ export default function DevTools() {
           lamports,
           programId: TOKEN_PROGRAM_ID,
         }),
-        // Initialize mint
         createInitializeMintInstruction(
           mint,
           decimals,
-          publicKey, // mint authority
-          null, // freeze authority
+          publicKey,
+          null,
           TOKEN_PROGRAM_ID
         )
       );
 
-      // Get recent blockhash
       const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
-
-      // Sign with mint keypair (for account creation)
       transaction.partialSign(mintKeypair);
-
-      // Sign with wallet
       const signed = await signTransaction(transaction);
-      
-      // Send transaction
       const signature = await connection.sendRawTransaction(signed.serialize());
       await connection.confirmTransaction(signature, "confirmed");
 
       const mintStr = mint.toString();
       setMintAddress(mintStr);
       
-      // Save to localStorage
       saveMint({
         address: mintStr,
         name: tokenName || undefined,
@@ -115,7 +100,6 @@ export default function DevTools() {
         createdAt: Date.now(),
       });
       
-      // Clear form fields
       setTokenName("");
       setTokenSymbol("");
       
@@ -148,14 +132,11 @@ export default function DevTools() {
 
     try {
       const mint = new PublicKey(mintAddress);
-      
-      // Get actual decimals from mint if it exists, otherwise use user input
       let decimals = parseInt(tokenDecimals) || 9;
       try {
         const mintInfo = await getMint(connection, mint);
         decimals = mintInfo.decimals;
       } catch (error) {
-        // Mint doesn't exist or can't be fetched, use user input
         if (!tokenDecimals || isNaN(parseInt(tokenDecimals))) {
           setStatus("Please enter decimals for the mint");
           setLoading(false);
@@ -167,35 +148,30 @@ export default function DevTools() {
       const supply = parseFloat(tokenSupply);
       const amount = BigInt(Math.floor(supply * Math.pow(10, decimals)));
 
-      // Get associated token account address
       const tokenAccount = getAssociatedTokenAddressSync(
         mint,
-        publicKey, // owner
-        false, // allowOwnerOffCurve
+        publicKey,
+        false,
         TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
-      // Check if token account exists
       let accountExists = false;
       try {
         await getAccount(connection, tokenAccount);
         accountExists = true;
       } catch (error) {
-        // Account doesn't exist, we'll create it
         accountExists = false;
       }
 
-      // Create transaction
       const transaction = new Transaction();
       
-      // Add create ATA instruction if needed
       if (!accountExists) {
         transaction.add(
           createAssociatedTokenAccountInstruction(
-            publicKey, // payer
+            publicKey,
             tokenAccount,
-            publicKey, // owner
+            publicKey,
             mint,
             TOKEN_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
@@ -203,27 +179,21 @@ export default function DevTools() {
         );
       }
       
-      // Add mintTo instruction
       transaction.add(
         createMintToInstruction(
           mint,
           tokenAccount,
-          publicKey, // mint authority
+          publicKey,
           Number(amount),
-          [], // multiSigners (empty since we sign with wallet)
+          [],
           TOKEN_PROGRAM_ID
         )
       );
 
-      // Get recent blockhash
       const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
-
-      // Sign with wallet (mint authority)
       const signed = await signTransaction(transaction);
-      
-      // Send transaction
       const signature = await connection.sendRawTransaction(signed.serialize());
       await connection.confirmTransaction(signature, "confirmed");
       

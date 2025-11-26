@@ -1,6 +1,6 @@
 # AMM Frontend
 
-A modern Next.js frontend for the AMM (Automated Market Maker) DEX.
+Next.js frontend for the AMM (Automated Market Maker) DEX.
 
 ## Features
 
@@ -15,15 +15,13 @@ A modern Next.js frontend for the AMM (Automated Market Maker) DEX.
 ### Prerequisites
 
 - Node.js 18+ 
-- Yarn or npm
+- Yarn
 
 ### Installation
 
 ```bash
 # Install dependencies
-yarn install
-# or
-npm install
+yarn
 ```
 
 ### Development
@@ -31,8 +29,6 @@ npm install
 ```bash
 # Run development server
 yarn dev
-# or
-npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -42,8 +38,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 # Build for production
 yarn build
-# or
-npm run build
 ```
 
 ## Configuration

@@ -6,7 +6,7 @@ interface CopyableAddressProps {
   address: string;
   short?: boolean;
   className?: string;
-  displayName?: string; // Optional name to display instead of address
+  displayName?: string;
 }
 
 export default function CopyableAddress({ 
@@ -19,7 +19,6 @@ export default function CopyableAddress({
 
   const handleCopy = async () => {
     try {
-      // Always copy the address, not the display name
       await navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -28,7 +27,6 @@ export default function CopyableAddress({
     }
   };
 
-  // If displayName is provided, show it; otherwise show address
   const displayText = displayName || (short ? `${address.slice(0, 8)}...${address.slice(-8)}` : address);
   const isNameDisplayed = !!displayName;
 

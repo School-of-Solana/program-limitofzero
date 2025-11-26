@@ -47,9 +47,7 @@ anchor build
 
 ```bash
 cd ../../frontend
-npm install
-# or
-yarn install
+yarn
 ```
 
 ## 🏗️ Project Structure
@@ -119,8 +117,6 @@ solana-test-validator
 
 ```bash
 cd frontend
-npm run dev
-# or
 yarn dev
 ```
 
@@ -348,7 +344,7 @@ The frontend is deployed on vercel:
 
 ```bash
 cd frontend
-npm run build
+yarn run build
 # Deploy the 'out' or '.next' directory
 ```
 

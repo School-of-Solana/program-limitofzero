@@ -23,7 +23,6 @@ export default function TokenBalance() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper to get token name from saved mints
   const getTokenName = (mintAddress: string): string | undefined => {
     const savedMint = savedMints.find((m) => m.address === mintAddress);
     return savedMint?.name;
@@ -39,7 +38,6 @@ export default function TokenBalance() {
     setError(null);
 
     try {
-      // Get all token accounts for the user
       const response = await connection.getParsedTokenAccountsByOwner(
         publicKey,
         {
@@ -48,8 +46,6 @@ export default function TokenBalance() {
       );
 
       const tokenAccounts = response.value;
-
-      // Fetch mint info for each token to get decimals
       const tokenData = await Promise.all(
         tokenAccounts.map(async (account) => {
           try {
@@ -57,13 +53,11 @@ export default function TokenBalance() {
             const tokenInfo = parsedData.parsed.info;
             const tokenAmount = tokenInfo.tokenAmount;
             
-            // Try to get mint info for better decimals
             let decimals = tokenAmount.decimals;
             try {
               const mintInfo = await getMint(connection, new PublicKey(tokenInfo.mint));
               decimals = mintInfo.decimals;
             } catch (err) {
-              // Use decimals from tokenAmount if getMint fails
             }
             
             const uiAmount = Number(tokenAmount.uiAmount) || 0;
@@ -82,10 +76,7 @@ export default function TokenBalance() {
         })
       );
 
-      // Filter out null values
       const validTokens = tokenData.filter((token): token is TokenBalance => token !== null);
-
-      // Filter out zero balances and sort by amount
       const nonZeroTokens = validTokens
         .filter((token) => token.uiAmount > 0)
         .sort((a, b) => b.uiAmount - a.uiAmount);
@@ -101,7 +92,6 @@ export default function TokenBalance() {
 
   useEffect(() => {
     fetchTokenBalances();
-    // Refresh every 10 seconds
     const interval = setInterval(fetchTokenBalances, 10000);
     return () => clearInterval(interval);
   }, [publicKey, connection]);

@@ -23,7 +23,6 @@ export default function PoolList() {
   const [poolShares, setPoolShares] = useState<PoolShare[]>([]);
   const [loadingShares, setLoadingShares] = useState(false);
 
-  // Helper to get token name from saved mints
   const getTokenName = (mintAddress: string): string | undefined => {
     const savedMint = savedMints.find((m) => m.address === mintAddress);
     return savedMint?.name;
@@ -48,7 +47,6 @@ export default function PoolList() {
               const userAccount = await getAccount(connection, userLpAccount);
               userLpAmount = userAccount.amount;
             } catch (error) {
-              // User doesn't have LP tokens
               userLpAmount = BigInt(0);
             }
 

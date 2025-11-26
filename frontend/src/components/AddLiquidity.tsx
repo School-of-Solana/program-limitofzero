@@ -18,7 +18,6 @@ export default function AddLiquidity() {
   const { savedMints } = useSavedMints();
   const { pools, loading: loadingPools, refreshPools } = usePools();
 
-  // Helper to get token name from saved mints
   const getTokenName = (mintAddress: string): string | undefined => {
     const savedMint = savedMints.find((m) => m.address === mintAddress);
     return savedMint?.name;
@@ -54,7 +53,6 @@ export default function AddLiquidity() {
         const balance = (Number(account.amount) / Math.pow(10, mintInfo.decimals)).toFixed(6);
         setBalance(balance);
       } catch (error) {
-        // Token account doesn't exist
         setBalance("0.000000");
       }
     } catch (error) {
@@ -112,7 +110,6 @@ export default function AddLiquidity() {
         const userAccount = await getAccount(connection, userLpAccount);
         userLpAmount = userAccount.amount;
       } catch (error) {
-        // User doesn't have LP tokens
         userLpAmount = BigInt(0);
       }
 
@@ -157,7 +154,6 @@ export default function AddLiquidity() {
       setMintA(pool.mintA.toString());
       setMintB(pool.mintB.toString());
       
-      // Use reserves from context if available, otherwise fetch
       if (pool.reserveA && pool.reserveB && pool.reserveA !== "N/A" && pool.reserveB !== "N/A") {
         setPoolReserveA(pool.reserveA);
         setPoolReserveB(pool.reserveB);
@@ -165,11 +161,8 @@ export default function AddLiquidity() {
         await fetchPoolReserves(pool);
       }
       
-      // Fetch user balances
       await fetchTokenBalance(pool.mintA.toString(), setBalanceA);
       await fetchTokenBalance(pool.mintB.toString(), setBalanceB);
-      
-      // Fetch user share
       await fetchUserShare(pool);
     }
   };
@@ -190,27 +183,23 @@ export default function AddLiquidity() {
     }
   }, [mintB, selectedPool, publicKey, connection]);
 
-  // Calculate recommended amount B based on amount A and pool reserves
   useEffect(() => {
     if (!amountA || parseFloat(amountA) <= 0) {
       setRecommendedAmountB("");
       return;
     }
 
-    // If pool is selected and has reserves, calculate based on pool ratio
     if (selectedPool && poolReserveA && poolReserveB && poolReserveA !== "N/A" && poolReserveB !== "N/A") {
       const reserveA = parseFloat(poolReserveA);
       const reserveB = parseFloat(poolReserveB);
       
       if (reserveA > 0 && reserveB > 0) {
-        // Calculate required B: amountB = amountA * reserveB / reserveA
         const recommendedB = (parseFloat(amountA) * reserveB) / reserveA;
         setRecommendedAmountB(recommendedB.toFixed(6));
       } else {
         setRecommendedAmountB("");
       }
     } else {
-      // For new pools, suggest 1:1 ratio
       setRecommendedAmountB(amountA);
     }
   }, [amountA, selectedPool, poolReserveA, poolReserveB]);
@@ -236,7 +225,6 @@ export default function AddLiquidity() {
       const mintBPubkey = new PublicKey(mintB);
       const poolPda = await getPoolPda(ammPda, mintAPubkey, mintBPubkey);
 
-      // Get actual decimals from mints
       const mintAInfo = await getMint(connection, mintAPubkey);
       const mintBInfo = await getMint(connection, mintBPubkey);
       
@@ -275,16 +263,13 @@ export default function AddLiquidity() {
 
       setStatus(`Success! Liquidity added.\nTransaction: ${tx}`);
       
-      // Refresh pools after successful operation
       await refreshPools();
       
-      // Refresh user share
       const pool = pools.find((p) => p.poolPda.toString() === selectedPool);
       if (pool) {
         await fetchUserShare(pool);
       }
       
-      // Clear amounts
       setAmountA("");
       setAmountB("");
     } catch (error: any) {

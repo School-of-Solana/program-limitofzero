@@ -13,7 +13,6 @@ export default function StatusMessage({ status, onClose }: StatusMessageProps) {
   useEffect(() => {
     if (status) {
       setIsVisible(true);
-      // Auto-hide after 10 seconds for success messages
       if (status.includes("Success") || status.includes("success")) {
         const timer = setTimeout(() => {
           setIsVisible(false);
@@ -31,7 +30,6 @@ export default function StatusMessage({ status, onClose }: StatusMessageProps) {
   const isError = status.includes("Error") || status.includes("error") || status.includes("Failed");
   const isSuccess = status.includes("Success") || status.includes("success");
 
-  // Extract transaction signature if present
   const txMatch = status.match(/Transaction:?\s*([A-Za-z0-9]{32,})/);
   const txSignature = txMatch ? txMatch[1] : null;
   const cluster = process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet";
