@@ -2,6 +2,8 @@
 
 A decentralized exchange (DEX) built on Solana using the Anchor framework. This project implements a fully functional Automated Market Maker with liquidity pools, token swaps, and comprehensive frontend interface.
 
+**Deployed Frontend URL:** [https://program-limitofzero.vercel.app/](https://program-limitofzero.vercel.app/)
+
 ## 🚀 Features
 
 ### Core Functionality
@@ -139,10 +141,11 @@ anchor test
 ### 2. Create Token Pool (Complete Workflow)
 
 **Prerequisites:**
+- **You can use any existing SPL tokens** - you don't need to create new tokens. Simply use the mint addresses of any SPL tokens you already have (e.g., USDC, SOL, or any other SPL token).
 - If you already have **2 SPL tokens** with their mint addresses, you can skip to **Step 3.5** (Create AMM) if you haven't created an AMM yet, or proceed directly to **Step 3.6** (Create the Pool).
-- If you don't have tokens yet, follow the steps below starting from **Step 3.1** to create them using Dev Tools.
+- If you don't have tokens yet and want to create test tokens, follow the steps below starting from **Step 3.1** to create them using Dev Tools.
 
-To create a liquidity pool, you first need to create the tokens that will be paired in the pool. Follow these steps:
+To create a liquidity pool, you need two tokens to pair. You can use any existing SPL tokens or create new ones. Follow these steps:
 
 #### Step 3.1: Create Token A
 1. Navigate to the **"Dev Tools"** tab
